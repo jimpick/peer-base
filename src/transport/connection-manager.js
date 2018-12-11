@@ -44,6 +44,8 @@ module.exports = class ConnectionManager extends EventEmitter {
     this._peerInterestDiscovery.removeListener('peer', this._peerIsInterested)
     this._ring.removeListener('changed', this._debouncedResetConnections)
     this._discovery.removeListener('disconnect', this._onDisconnect)
+    this._ring = Ring(this._options.preambleByteCount)
+    this._diasSet && this._discovery.resetConnections(this._diasSet(this._ring))
   }
 
   needsConnection (peerInfo) {
