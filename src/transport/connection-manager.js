@@ -27,6 +27,7 @@ module.exports = class ConnectionManager extends EventEmitter {
     this._peerIsInterested = this._peerIsInterested.bind(this)
 
     this._onDisconnect = this._onDisconnect.bind(this)
+    this._onDialed = this._onDialed.bind(this)
     this._debouncedResetConnections = debounce(
       this._resetConnections.bind(this), this._options.debounceResetConnectionsMS)
   }
@@ -34,7 +35,8 @@ module.exports = class ConnectionManager extends EventEmitter {
   start () {
     this._diasSet = DiasSet(this._options.peerIdByteCount, this._ipfs._peerInfo, this._options.preambleByteCount)
     this._ring.on('changed', this._debouncedResetConnections)
-    this._discovery.on('disconnect', this._onDisconnect)
+    this._discovery.on('outbound:disconnect', this._onDisconnect)
+    this._discovery.on('dialed', this._onDialed)
     this._peerInterestDiscovery.on('peer', this._peerIsInterested)
     this._peerInterestDiscovery.start()
   }
@@ -43,7 +45,8 @@ module.exports = class ConnectionManager extends EventEmitter {
     this._peerInterestDiscovery.stop()
     this._peerInterestDiscovery.removeListener('peer', this._peerIsInterested)
     this._ring.removeListener('changed', this._debouncedResetConnections)
-    this._discovery.removeListener('disconnect', this._onDisconnect)
+    this._discovery.removeListener('outbound:disconnect', this._onDisconnect)
+    this._discovery.removeListener('dialed', this._onDialed)
     this._ring = Ring(this._options.preambleByteCount)
     this._diasSet && this._discovery.resetConnections(this._diasSet(this._ring))
   }
@@ -67,11 +70,20 @@ module.exports = class ConnectionManager extends EventEmitter {
   }
 
   // Note: this only fires when a peer we have an outbound connection to
-  // disconnects
+  // disconnects unexpectedly (it will not fire if we deliberately removed
+  // the peer from the ring)
   _onDisconnect (peerInfo) {
     // Remove the peer from the ring
-    debug('peer %s disconnected', peerInfo.id.toB58String())
+    debug('peer %s disconnected, removing from ring', peerInfo.id.toB58String())
     this._ring.remove(peerInfo)
+  }
+
+  _onDialed (peerInfo, err) {
+    if (err) {
+      // Dial failure trying to connect to a peer so remove it from the ring
+      debug('peer %s dial failure, removing from ring', peerInfo.id.toB58String())
+      this._ring.remove(peerInfo)
+    }
   }
 
   _resetConnections () {
