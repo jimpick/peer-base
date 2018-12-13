@@ -121,33 +121,38 @@ module.exports = class GlobalConnectionManager extends EventEmitter {
     this._peerCollaborations.delete(peerId)
   }
 
-  async maybeHangUp (peerInfo) {
-    if (this._inbound.has(peerInfo) || this._appTransport.needsConnection(peerInfo)) {
-      // either there's an inbound connection
-      // or we are using at the app layer.
-      // Either way let's not close it
-      return
-    }
-
-    const peerId = peerInfo.id.toB58String()
-    const dialedProtocols = this._peerCollaborations.get(peerId)
-    const canClose = !dialedProtocols || !dialedProtocols.size
-    if (!canClose) return
-
-    debug('hanging up %s', peerInfo.id.toB58String())
+  maybeHangUp (peerInfo) {
     return new Promise((resolve) => {
-      this._ipfs._libp2pNode.hangUp(peerInfo, (err) => {
-        if (err) {
-          console.error('error hanging up:', err.message)
-          debug('error hanging up:', err)
-        }
-        resolve()
-      })
-    }).catch((err) => {
-      if (err.message !== 'The libp2p node is not started yet') {
-        console.error('error hanging up:', err.message)
+      if (this._inbound.has(peerInfo) || this._appTransport.needsConnection(peerInfo)) {
+        // either there's an inbound connection
+        // or we are using at the app layer.
+        // Either way let's not close it
+        return resolve()
       }
-      debug('error hanging up:', err)
+
+      const peerId = peerInfo.id.toB58String()
+      const dialedProtocols = this._peerCollaborations.get(peerId)
+      const canClose = !dialedProtocols || !dialedProtocols.size
+      if (canClose) {
+        debug('hanging up %s', peerInfo.id.toB58String())
+        try {
+          this._ipfs._libp2pNode.hangUp(peerInfo, (err) => {
+            if (err) {
+              console.error('error hanging up:', err.message)
+              debug('error hanging up:', err)
+            }
+            resolve()
+          })
+        } catch (err) {
+          if (err.message !== 'The libp2p node is not started yet') {
+            console.error('error hanging up:', err.message)
+          }
+          debug('error hanging up:', err)
+          resolve()
+        }
+      } else {
+        resolve()
+      }
     })
   }
 }
