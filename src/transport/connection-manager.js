@@ -1,6 +1,6 @@
 'use strict'
 
-const debug = require('debug')('peer-star:connection-manager')
+const debug = require('debug')('peer-base:connection-manager')
 const EventEmitter = require('events')
 const PeerInterestDiscovery = require('../discovery/peer-interest-discovery')
 const Ring = require('../common/ring')
