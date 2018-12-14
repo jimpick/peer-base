@@ -141,6 +141,9 @@ module.exports = class ConnectionManager extends EventEmitter {
     // so here we're only removing it from the ring when there is an unexpected
     // disconnect
     if (this._connections.has(peerInfo)) {
+      // Signal discovery that an unexpected disconnect occurred
+      this._discovery.onUnexpectedDisconnect(peerInfo)
+
       // Remove the peer from the ring
       debug('peer %s disconnected, removing from ring', peerInfo.id.toB58String())
       this._connections.delete(peerInfo)
