@@ -141,8 +141,7 @@ module.exports = class ConnectionManager extends EventEmitter {
     // so here we're only removing it from the ring when there is an unexpected
     // disconnect
     if (this._connections.has(peerInfo)) {
-      // Signal discovery that an unexpected disconnect occurred
-      this._discovery.onUnexpectedDisconnect(peerInfo)
+      this.emit('disconnect:unexpected', peerInfo)
 
       // Remove the peer from the ring
       debug('peer %s disconnected, removing from ring', peerInfo.id.toB58String())
@@ -155,6 +154,8 @@ module.exports = class ConnectionManager extends EventEmitter {
   // This gets triggered by Discovery dials and by our own dials
   _onDialed (peerInfo, err) {
     if (err) {
+      this.emit('disconnect:unexpected', peerInfo)
+
       // Dial failure trying to connect to a peer so remove it from the ring
       // and hang up
       debug('peer %s dial failure, removing from ring', peerInfo.id.toB58String())
