@@ -27,6 +27,7 @@ module.exports = class ConnectionManager extends EventEmitter {
 
     this._inboundConnections = new PeerSet()
     this._outboundConnections = new PeerSet()
+    this._dials = new PeerSet()
 
     this._protocol = Protocol(ipfs, collaboration, shared, this._options.keys, clocks, replication, options)
 
@@ -55,7 +56,7 @@ module.exports = class ConnectionManager extends EventEmitter {
       this._resetConnections.bind(this), this._options.debounceResetConnectionsMS)
   }
 
-  async start (diasSet) {
+  start (diasSet) {
     this._stopped = false
     this._diasSet = diasSet
 
@@ -63,11 +64,10 @@ module.exports = class ConnectionManager extends EventEmitter {
       this._resetConnections()
     }, this._options.resetConnectionIntervalMS)
 
-    await this._globalConnectionManager.handle(this._protocol.name(), this._protocol.handler)
+    return this._globalConnectionManager.handle(this._protocol.name(), this._protocol.handler)
   }
 
   stop () {
-    // clearInterval(this._resetInterval)
     this._stopped = true
     if (this._resetInterval) {
       clearInterval(this._resetInterval)
@@ -75,6 +75,9 @@ module.exports = class ConnectionManager extends EventEmitter {
     }
 
     this._globalConnectionManager.unhandle(this._protocol.name())
+
+    // disconnects all
+    return this._resetConnections()
   }
 
   observe (observer) {
@@ -137,47 +140,57 @@ module.exports = class ConnectionManager extends EventEmitter {
     this._debouncedResetConnections()
   }
 
-  _resetConnections () {
-    return new Promise(async (resolve, reject) => {
-      const diasSet = this._diasSet(this._ring)
+  async _resetConnections () {
+    const diasSet = this._stopped ? new PeerSet() : this._diasSet(this._ring)
 
-      // make sure we're connected to every peer of the Dias Peer Set
-      for (let peerInfo of diasSet.values()) {
-        if (!this._outboundConnections.has(peerInfo)) {
-          try {
-            const connection = await this._globalConnectionManager.connect(
-              peerInfo, this._protocol.name())
-            this._unreachables.delete(peerInfo.id.toB58String())
-            this._protocol.dialerFor(peerInfo, connection)
-            this.emit('connected', peerInfo)
-            connection.once('closed', () => {
-              setTimeout(() => {
-                this.emit('disconnected', peerInfo)
-              }, 0)
-            })
-          } catch (err) {
-            this._peerUnreachable(peerInfo)
-            // this._ring.remove(peerInfo)
-            debug('error connecting:', err)
-          }
-        }
-      }
+    // make sure we're connected to every peer of the Dias Peer Set
+    const connectPromises = [...diasSet.values()].map(async (peerInfo) => {
+      // Check if we already have a connection to the peer
+      if (this._outboundConnections.has(peerInfo)) return
 
-      // make sure we disconnect from peers not in the Dias Peer Set
-      for (let peerInfo of this._outboundConnections.values()) {
-        if (!diasSet.has(peerInfo)) {
-          try {
-            await this._globalConnectionManager.disconnect(peerInfo, this._protocol.name())
-          } catch (err) {
-            debug('error hanging up:', err)
-          }
-          this._unreachables.delete(peerInfo.id.toB58String())
-        }
+      // Check if we're already dialing the peer
+      if (this._dials.has(peerInfo)) return
+
+      // Dial the peer
+      this._dials.add(peerInfo)
+      try {
+        const connection = await this._globalConnectionManager.connect(
+          peerInfo, this._protocol.name())
+
+        // Check if the dial was cancelled
+        if (!this._dials.has(peerInfo)) return
+
+        this._unreachables.delete(peerInfo.id.toB58String())
+        this._protocol.dialerFor(peerInfo, connection)
+        this.emit('connected', peerInfo)
+        connection.once('closed', () => {
+          setTimeout(() => {
+            this.emit('disconnected', peerInfo)
+          }, 0)
+        })
+      } catch (err) {
+        this._peerUnreachable(peerInfo)
+        debug('error connecting:', err)
       }
-    }).catch((err) => {
-      console.error('error resetting connections:', err.message)
-      debug('error resetting connections:', err)
+      this._dials.delete(peerInfo)
     })
+
+    // make sure we disconnect from peers not in the Dias Peer Set
+    const disconnectPromises = [...this._outboundConnections.values()].map(async (peerInfo) => {
+      // Check if we should have a connection to this peer
+      if (diasSet.has(peerInfo)) return
+
+      // If not, cancel any pending dial and disconnect
+      this._dials.delete(peerInfo)
+      try {
+        await this._globalConnectionManager.disconnect(peerInfo, this._protocol.name())
+      } catch (err) {
+        debug('error hanging up:', err)
+      }
+      this._unreachables.delete(peerInfo.id.toB58String())
+    })
+
+    return Promise.all(connectPromises.concat(disconnectPromises))
   }
 
   _peerUnreachable (peerInfo) {

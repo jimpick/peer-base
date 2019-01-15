@@ -29,7 +29,7 @@ class Protocol extends EventEmitter {
     this._clocks = clocks
     this._options = Object.assign({}, defaultOptions, options)
     this._pushProtocol = new PushProtocol(ipfs, shared, this._clocks, keys, replication, collaboration, this._options)
-    this._pullProtocol = new PullProtocol(ipfs, shared, this._clocks, keys, replication, this._options)
+    this._pullProtocol = new PullProtocol(ipfs, shared, this._clocks, keys, replication, collaboration, this._options)
 
     this.handler = this.handler.bind(this)
   }
@@ -42,8 +42,8 @@ class Protocol extends EventEmitter {
     conn.getPeerInfo((err, peerInfo) => {
       if (err) {
         debug('%s: error getting peer info:', this._peerId(), this.err)
-        console.error('%s: error getting peer info:', this._peerId(), err.message)
         if (!expectedNetworkError(err)) {
+          console.error('%s: error getting peer info:', this._peerId(), err.message)
           this.emit('error', err)
         }
         return

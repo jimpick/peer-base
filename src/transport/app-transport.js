@@ -2,18 +2,11 @@
 
 const debug = require('debug')('peer-base:app-transport')
 const EventEmitter = require('events')
-const Ring = require('../common/ring')
-const DiasSet = require('../common/dias-peer-set')
-const PeerSet = require('../common/peer-set')
 const ConnectionManager = require('./connection-manager')
 const Gossip = require('./gossip')
-const Discovery = require('./discovery')
+const Discovery = require('../discovery/discovery')
+const Dialer = require('../discovery/dialer')
 const GlobalConnectionManager = require('./global-connection-manager')
-
-const defaultOptions = {
-  peerIdByteCount: 32,
-  preambleByteCount: 2
-}
 
 module.exports = (...args) => new AppTransport(...args)
 
@@ -21,49 +14,43 @@ class AppTransport extends EventEmitter {
   constructor (app, ipfs, transport, options) {
     super()
     this._started = false
+    this._app = app
     this._ipfs = ipfs
     this._transport = transport
-    this._app = app
-    this._options = Object.assign({}, defaultOptions, options)
 
-    this._ring = Ring(this._options.preambleByteCount)
-
-    this._outboundConnections = new PeerSet()
-    this._inboundConnections = new PeerSet()
+    // This is used by libp2p TransportManager to store listeners
     this.listeners = []
 
-    this._onPeerDisconnect = this._onPeerDisconnect.bind(this)
-    this._onPeerConnect = this._onPeerConnect.bind(this)
+    this._globalConnectionManager = new GlobalConnectionManager(ipfs, this)
+    this._dialer = new Dialer(this._globalConnectionManager, options)
 
     this.discovery = new Discovery(
-      this._appTopic(),
+      app,
       this._ipfs,
+      this._dialer,
       this._transport.discovery,
-      this._ring,
-      this._inboundConnections,
-      this._outboundConnections,
-      this._options)
-
-    this.discovery.on('start', () => this._maybeStart())
-
-    this._globalConnectionManager = new GlobalConnectionManager(ipfs, this)
+      this._globalConnectionManager,
+      options)
 
     this._connectionManager = new ConnectionManager(
+      this._ipfs,
+      this._dialer,
+      this.discovery,
       this._globalConnectionManager,
-      this._ring,
-      this._outboundConnections,
-      this._inboundConnections,
-      this._options)
-
-    this._connectionManager.on('peer', (peerInfo) => {
-      this.discovery.emit('peer', peerInfo)
-    })
+      options)
 
     this._gossip = Gossip(app.name, ipfs)
     this._gossip.on('error', (err) => this.emit('error', err))
     this._app.setGossip(this._gossip)
 
     this._app.setGlobalConnectionManager(this._globalConnectionManager)
+
+    this._onPeer = this._onPeer.bind(this)
+
+    // Discovery gets started by libp2p, so once it has started we can start
+    // the rest of the transport stack
+    this.discovery.on('start', () => this._maybeStart())
+    this.discovery.on('stop', () => this.stop())
   }
 
   dial (ma, options, callback) {
@@ -78,24 +65,12 @@ class AppTransport extends EventEmitter {
     return this._transport.filter(multiaddrs)
   }
 
-  close (callback) {
-    this._connectionManager.stop()
-    this._globalConnectionManager.stop()
-    this._ipfs._libp2pNode.removeListener('peer:disconnect', this._onPeerDisconnect)
-    this._gossip.stop((err) => {
-      if (err) {
-        debug('error stopping gossip: ', err)
-      }
-      this._transport.close(callback)
-    })
+  hasConnection (peerInfo) {
+    return this._connectionManager.hasConnection(peerInfo) || this.discovery.needsConnection(peerInfo)
   }
 
-  isOutbound (peerInfo) {
-    return this._outboundConnections.has(peerInfo)
-  }
-
-  hasPeer (peerInfo) {
-    return this._ring.has(peerInfo)
+  needsConnection (peerInfo) {
+    return this._connectionManager.needsConnection(peerInfo) || this.discovery.needsConnection(peerInfo)
   }
 
   _maybeStart () {
@@ -105,54 +80,37 @@ class AppTransport extends EventEmitter {
     }
   }
 
-  _start () {
-    this._startPeerId()
+  async _start () {
+    this._dialer.start()
+    this.discovery.on('peer', this._onPeer)
+    await this._awaitIpfsStart()
     this._gossip.start()
-    this._connectionManager.start(this._diasSet)
+    this._connectionManager.start()
     this._globalConnectionManager.start()
-    this._ipfs._libp2pNode.on('peer:disconnect', this._onPeerDisconnect)
-    this._ipfs._libp2pNode.on('peer:connect', this._onPeerConnect)
   }
 
-  _startPeerId () {
-    if (this._ipfs._peerInfo) {
-      this._diasSet = DiasSet(this._options.peerIdByteCount, this._ipfs._peerInfo, this._options.preambleByteCount)
-    } else {
-      this._ipfs.once('ready', this._startPeerId.bind(this))
-    }
+  async _awaitIpfsStart () {
+    return new Promise(resolve => {
+      if (this._ipfs._peerInfo) {
+        return resolve()
+      }
+      this._ipfs.once('ready', resolve)
+    })
   }
 
-  _onPeerDisconnect (peerInfo) {
-    debug('peer %s disconnected', peerInfo.id.toB58String())
-    const isOutbound = this._outboundConnections.has(peerInfo)
-    if (isOutbound) {
-      this._outboundConnections.delete(peerInfo)
-    } else {
-      this._inboundConnections.delete(peerInfo)
-    }
-
-    this._ring.remove(peerInfo)
-    this.emit('peer disconnected', peerInfo)
-    if (isOutbound) {
-      this.emit('outbound peer disconnected', peerInfo)
-    } else {
-      this.emit('inbound peer disconnected', peerInfo)
-    }
+  stop () {
+    this.discovery.removeListener('peer', this._onPeer)
+    this._dialer.stop()
+    this._connectionManager.stop()
+    this._globalConnectionManager.stop()
+    this._gossip.stop((err) => {
+      if (err) {
+        debug('error stopping gossip: ', err)
+      }
+    })
   }
 
-  _onPeerConnect (peerInfo) {
-    debug('peer %s connected', peerInfo.id.toB58String())
-    this.emit('peer connected', peerInfo)
-    if (this._outboundConnections.has(peerInfo)) {
-      this.emit('outbound peer connected', peerInfo)
-    } else {
-      this._inboundConnections.add(peerInfo)
-      this._ring.add(peerInfo)
-      this.emit('inbound peer connected', peerInfo)
-    }
-  }
-
-  _appTopic () {
-    return this._app.name
+  _onPeer (peerInfo) {
+    this.emit('outbound peer connected', peerInfo)
   }
 }

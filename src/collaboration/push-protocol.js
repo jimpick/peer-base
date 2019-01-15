@@ -44,13 +44,25 @@ module.exports = class PushProtocol {
       return clockDiff
     }
 
-    const pushDeltas = async (peerClock) => {
-      const ds = this._shared.deltas(peerClock)
+    // const pushDeltas = async (peerClock) => {
+    //   const ds = this._shared.deltas(peerClock)
+    //   let newRemoteClock = {}
+    //   for (let d of ds) {
+    //     const [clock, authorClock] = d
+    //     newRemoteClock = vectorclock.merge(newRemoteClock, vectorclock.sumAll(clock, authorClock))
+    //     output.push(encode([await this._signAndEncryptDelta(d)]))
+    //   }
+
+    //   return vectorclock.merge(peerClock, newRemoteClock)
+    // }
+
+    const pushDeltaBatches = async (peerClock) => {
+      const batches = this._shared.deltaBatches(peerClock)
       let newRemoteClock = {}
-      for (let d of ds) {
-        const [clock, authorClock] = d
+      for (let batch of batches) {
+        const [clock, authorClock] = batch
         newRemoteClock = vectorclock.merge(newRemoteClock, vectorclock.sumAll(clock, authorClock))
-        output.push(encode([await this._signAndEncryptDelta(d)]))
+        output.push(encode([await this._signAndEncryptDelta(batch)]))
       }
 
       return vectorclock.merge(peerClock, newRemoteClock)
@@ -74,7 +86,8 @@ module.exports = class PushProtocol {
         debug('%s: pushing to %s', this._peerId(), remotePeerId)
         // Let's try to see if we have deltas to deliver
         if (!isPinner && !this._options.replicateOnly) {
-          remoteClock = await pushDeltas(remoteClock)
+          // remoteClock = await pushDeltas(remoteClock)
+          remoteClock = await pushDeltaBatches(remoteClock)
         }
 
         if (isPinner || remoteNeedsUpdate(myClock, remoteClock)) {
@@ -111,7 +124,7 @@ module.exports = class PushProtocol {
         } else {
           debug('remote is up to date')
         }
-      })
+      }).catch((onEnd))
     }
 
     const debounceReduceEntropyMS = () => isPinner ? this._options.debouncePushToPinnerMS : this._options.debouncePushMS
@@ -182,6 +195,12 @@ module.exports = class PushProtocol {
       }
     }
 
+    const onCollaborationStopped = () => {
+      onEnd()
+    }
+
+    this._collaboration.on('stopped', onCollaborationStopped)
+
     const onEnd = (err) => {
       this._clocks.takeDown(remotePeerId)
       if (!ended) {
@@ -191,6 +210,7 @@ module.exports = class PushProtocol {
         }
         ended = true
         this._shared.removeListener('clock changed', onClockChanged)
+        this._collaboration.removeListener('stopped', onCollaborationStopped)
         output.end(err)
 
         if (isPinner) {
