@@ -12,9 +12,9 @@ const AppFactory = require('./utils/create-app')
 const debug = require('debug')('peer-base:test:collaboration-random')
 
 describe('collaboration with random changes', function () {
-  const peerCount = process.browser ? 10 : 15
-  const charsPerPeer = 6
-  this.timeout(20000 * peerCount)
+  const peerCount = process.browser ? 10 : 3
+  const charsPerPeer = 10
+  this.timeout(2000000 * peerCount)
 
   const manyCharacters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'.split('')
 
@@ -99,6 +99,7 @@ describe('collaboration with random changes', function () {
       for (let j = 0; j < charsPerPeer; j++) {
         const character = characterFrom(manyCharacters, i * charsPerPeer + j)
         collaboration.shared.push(character)
+        debug(`Push ${collaborationIds.get(collaboration).slice(-3)} ${j} "${character}"`)
         if (i === Math.round(charsPerPeer / 2)) {
           await waitForHalfModifications()
         } else {
@@ -139,7 +140,7 @@ describe('collaboration with random changes', function () {
     }
 
     function randomShortTime () {
-      return Math.floor((1 / Math.log(Math.random() * 5 + 1.02) * 50) + 10)
+      return Math.floor((1 / Math.log(Math.random() * 5 + 1.015) * 20) + 10)
     }
 
     function characterFrom (characters, index) {

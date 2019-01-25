@@ -8,6 +8,8 @@ const b58Decode = require('bs58').decode
 const vectorclock = require('../common/vectorclock')
 const Store = require('./store')
 const peerToClockId = require('./peer-to-clock-id')
+const prettyClock = require('./pretty-clock')
+const chalk = require('chalk')
 
 const MAX_LISTENERS = 100
 
@@ -145,6 +147,9 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
     if (forName === name) {
       apply(delta)
       onClockChanged(newClock)
+      const value = crdtType.value(state).join('')
+      console.log(chalk.yellow(`State: ${id.slice(-3)} ${value.length} ` +
+                  `${prettyClock(newClock)}`))
       return newClock
     } else if (typeName) {
       return collaboration.sub(forName, typeName)
@@ -239,6 +244,12 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       shared.emit('delta', s, fromSelf)
 
       debug('%s: new state after join is', id, state)
+      // const value = crdtType.value(state).join('')
+      // console.log(`${id.slice(-3)} ${value.length} ${value}`)
+      /*
+      console.log(`State: ${id.slice(-3)} ${value.length} ` +
+                  `${prettyClock(shared.clock())}`)
+                  */
       try {
         changeEmitter.emitAll()
       } catch (err) {
