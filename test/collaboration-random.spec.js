@@ -106,10 +106,10 @@ describe('collaboration with random changes', function () {
 
       for (let j = 0; j < charsPerPeer; j++) {
         const character = characterFrom(manyCharacters, i * charsPerPeer + j)
-        collaboration.shared.push(character)
         debug(chalk.green(
           `Push ${collaborationIds.get(collaboration).slice(-3)} ${j + 1} "${character}"`
         ))
+        collaboration.shared.push(character)
         if (i === Math.round(charsPerPeer / 2)) {
           await waitForHalfModifications()
         } else {

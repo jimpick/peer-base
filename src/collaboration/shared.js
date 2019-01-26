@@ -44,6 +44,9 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       const authorClock = vectorclock.increment({}, clockId)
       const deltaRecord = [previousClock, authorClock, [name, crdtType.typeName, delta]]
       pushDelta(deltaRecord)
+      console.log('Jim applyAndPushDelta previousClock', prettyClock(previousClock))
+      console.log('Jim applyAndPushDelta authorClock', prettyClock(authorClock))
+      console.log('Jim applyAndPushDelta newClock', prettyClock(newClock))
       onClockChanged(newClock)
     } else {
       collaboration.parent.shared.pushDeltaForSub(name, crdtType.typeName, delta)
@@ -119,6 +122,9 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
     const newClock = vectorclock.increment(previousClock, clockId)
     const authorClock = vectorclock.increment({}, clockId)
     const deltaRecord = [previousClock, authorClock, [name, type, delta]]
+    console.log('Jim pushDeltaForSub previousClock', prettyClock(previousClock))
+    console.log('Jim pushDeltaForSub authorClock', prettyClock(authorClock))
+    console.log('Jim pushDeltaForSub newClock', prettyClock(newClock))
     pushDelta(deltaRecord)
     onClockChanged(newClock)
   }
