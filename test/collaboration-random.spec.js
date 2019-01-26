@@ -11,9 +11,11 @@ const AppFactory = require('./utils/create-app')
 
 const debug = require('debug')('peer-base:test:collaboration-random')
 
+const chalk = require('chalk')
+
 describe('collaboration with random changes', function () {
   const peerCount = process.browser ? 10 : 3
-  const charsPerPeer = 10
+  const charsPerPeer = 30 
   this.timeout(2000000 * peerCount)
 
   const manyCharacters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'.split('')
@@ -84,10 +86,16 @@ describe('collaboration with random changes', function () {
 
     const modifications = async (collaboration, i) => {
       const waitForCharCount = new Promise((resolve) => {
+        debug(`Waiting1 ${collaborationIds.get(collaboration).slice(-3)} ` +
+              `${collaboration.shared.value().length}`)
+
         if (collaboration.shared.value().length === expectedCharacterCount) {
           return resolve()
         }
         collaboration.on('state changed', () => {
+          debug(`Waiting2 ${collaborationIds.get(collaboration).slice(-3)} ` +
+                `${collaboration.shared.value().length}`)
+
           const value = collaboration.shared.value()
           const currentCount = value.length
           if (currentCount === expectedCharacterCount) {
@@ -99,7 +107,9 @@ describe('collaboration with random changes', function () {
       for (let j = 0; j < charsPerPeer; j++) {
         const character = characterFrom(manyCharacters, i * charsPerPeer + j)
         collaboration.shared.push(character)
-        debug(`Push ${collaborationIds.get(collaboration).slice(-3)} ${j} "${character}"`)
+        debug(chalk.green(
+          `Push ${collaborationIds.get(collaboration).slice(-3)} ${j + 1} "${character}"`
+        ))
         if (i === Math.round(charsPerPeer / 2)) {
           await waitForHalfModifications()
         } else {

@@ -145,11 +145,14 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       pushDelta(deltaRecord)
     }
     if (forName === name) {
+      const before = crdtType.value(state).join('')
       apply(delta)
       onClockChanged(newClock)
-      const value = crdtType.value(state).join('')
-      console.log(chalk.yellow(`State: ${id.slice(-3)} ${value.length} ` +
+      const after = crdtType.value(state).join('')
+      console.log(chalk.yellow(`State: ${id.slice(-3)} ${after.length} ` +
                   `${prettyClock(newClock)}`))
+      console.log(`  Before: "${before}"`)
+      console.log(`  After: "${after}"`)
       return newClock
     } else if (typeName) {
       return collaboration.sub(forName, typeName)

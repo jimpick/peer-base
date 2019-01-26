@@ -144,8 +144,15 @@ module.exports = class PullProtocol {
           }
         } else if (delta) {
           dbg('saving delta %j', deltaRecord)
-          console.log('Jim Saving delta')
-          saved = await this._shared.apply(await this._decryptAndVerifyDelta(deltaRecord), true)
+          const decrypted = await this._decryptAndVerifyDelta(deltaRecord)
+          // console.log('  Delta:', decrypted)
+          const values = [...decrypted[2][2][0].values()].join('')
+          console.log(chalk.red(
+            `Jim ${this._peerId().slice(-3)} <- ${remotePeerId.slice(-3)} ` +
+            'pull saving delta'
+          ))
+          console.log(`  "${values}"`)
+          saved = await this._shared.apply(decrypted, true)
         }
 
         if (saved) {
