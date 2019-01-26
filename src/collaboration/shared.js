@@ -10,6 +10,7 @@ const Store = require('./store')
 const peerToClockId = require('./peer-to-clock-id')
 const prettyClock = require('./pretty-clock')
 const chalk = require('chalk')
+const { encode } = require('delta-crdts-msgpack-codec')
 
 const MAX_LISTENERS = 100
 
@@ -239,6 +240,10 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       state = s
     } else {
       const newState = crdtType.join.call(changeEmitter, state, s)
+      console.log('Peer:', id.slice(-3))
+      console.log('Data before:', encode(state).toString('base64'))
+      console.log('Diff:', encode(s).toString('base64'))
+      console.log('Data after:', encode(newState).toString('base64'))
       if (crdtType.incrementalValue) {
         assert(valueCache)
         valueCache = crdtType.incrementalValue(state, newState, s, valueCache)
