@@ -180,7 +180,7 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
 
   shared.deltas = (since = {}, targetPeerId) => {
     return deltas.filter((deltaRecord) => {
-      if (vectorclock.isDeltaInteresting(deltaRecord, since, targetPeerId)) {
+      if (vectorclock.isDeltaInteresting(deltaRecord, since)) {
         const [previousClock, authorClock] = deltaRecord
         since = vectorclock.merge(since, vectorclock.sumAll(previousClock, authorClock))
         return true
