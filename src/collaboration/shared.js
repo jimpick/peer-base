@@ -191,11 +191,17 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
 
   shared.deltaBatches = (_since = {}, targetPeerId) => {
     let since = _since
+    console.log('Jim deltaBatches since: ', prettyClock(since),
+                'target:', targetPeerId)
     const deltas = shared.deltas(since, targetPeerId)
     let mainBatch
     const batches = []
     deltas.forEach((deltaRecord) => {
       const [deltaPreviousClock, deltaAuthorClock, [deltaName, , delta]] = deltaRecord
+      console.log(`  Delta: ` +
+                  prettyClock(deltaPreviousClock) + ' ' +
+                  prettyClock(deltaAuthorClock) + ' ' +
+                  `"${[...delta[0].values()].join('')}"`)
       if (deltaName !== name) {
         if (mainBatch) {
           mainBatch = undefined

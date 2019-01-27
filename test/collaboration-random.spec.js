@@ -18,7 +18,21 @@ describe('collaboration with random changes', function () {
   const charsPerPeer = 30 
   this.timeout(2000000 * peerCount)
 
-  const manyCharacters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'.split('')
+  const manyCharacters = (
+    'abcdefghijklmnopqrstuvwxyz' +
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ' +
+    '1234567890' +
+    'ÀÈÌÒÙ' +
+    'àèìòù' +
+    'ÁÉÍÓÚÝ' +
+    'áéíóúý' +
+    'ÂÊÎÔÛ' +
+    'âêîôû' +
+    'ÃÑÕ' +
+    'ãñõ' +
+    'ÄËÏÖÜŸ' +
+    'äëïöüÿ'
+  ).split('')
 
   const collaborationOptions = {}
 
