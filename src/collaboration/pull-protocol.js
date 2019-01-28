@@ -9,8 +9,6 @@ const handlingData = require('../common/handling-data')
 const { encode, decode } = require('delta-crdts-msgpack-codec')
 const vectorclock = require('../common/vectorclock')
 const expectedNetworkError = require('../common/expected-network-error')
-const prettyClock = require('./pretty-clock')
-const chalk = require('chalk')
 
 module.exports = class PullProtocol {
   constructor (ipfs, shared, clocks, keys, replication, collaboration, options) {
@@ -66,24 +64,9 @@ module.exports = class PullProtocol {
           const [previousClock, authorClock] = deltaRecord
           delta = deltaRecord[2]
           clock = vectorclock.sumAll(previousClock, authorClock)
-          console.log(chalk.red(
-            `Jim ${this._peerId().slice(-3)} <- ${remotePeerId.slice(-3)} ` +
-            'pull incoming ' +
-            prettyClock(this._shared.clock()) + ' <- ' + prettyClock(clock) +
-            ' (delta)'
-          ))
-         } else if (newStates) {
+        } else if (newStates) {
           clock = newStates[0]
           states = newStates[1]
-          if (states && Object.keys(clock) > 0) {
-            console.log(chalk.red(
-              'Jim', this._peerId().slice(-3), '<-', remotePeerId.slice(-3),
-              `Jim ${this._peerId().slice(-3)} <- ${remotePeerId.slice(-3)} ` +
-              'pull incoming ' +
-              prettyClock(this._shared.clock()) + ' <- ' + prettyClock(clock) +
-              ' (full state)'
-            ))
-          }
         }
 
         // If we didn't get a clock, then we can't make any assumptions, so
@@ -107,7 +90,6 @@ module.exports = class PullProtocol {
         // If we didn't get any state information, just a clock, then set a
         // timer to wait for the data corresponding to this clock to arrive
         if (!states && !delta) {
-          // console.log('Jim clock only')
           waitTimers.onClock(clock, () => {
             // If the timer expires, switch to eager mode
             dbg('switching to eager mode with peer %s', remotePeerId)
@@ -131,31 +113,18 @@ module.exports = class PullProtocol {
           }
 
           const decryptedRootState = await this._decryptAndVerifyDelta(rootState)
-          console.log('Jim Saving root state')
           saved = await this._shared.apply(decryptedRootState, false)
           if (saved) {
             for (let [collabName, collabState] of states) {
               if (collabName === null) {
                 continue // already processed root state
               }
-              console.log('Jim Saving sub state', collabName)
               await this._shared.apply(await this._decryptAndVerifyDelta(collabState), false, true)
             }
           }
         } else if (delta) {
           dbg('saving delta %j', deltaRecord)
-          const decrypted = await this._decryptAndVerifyDelta(deltaRecord)
-          // console.log('  Delta:', decrypted)
-          const previousClock = decrypted[0]
-          const authorClock = decrypted[1]
-          const values = [...decrypted[2][2][0].values()].join('')
-          console.log(chalk.red(
-            `Jim ${this._peerId().slice(-3)} <- ${remotePeerId.slice(-3)} ` +
-            'pull saving delta'
-          ))
-          console.log(`  ${prettyClock(previousClock)} ` +
-                      `${prettyClock(authorClock)} "${values}"`)
-          saved = await this._shared.apply(decrypted, true)
+          saved = await this._shared.apply(await this._decryptAndVerifyDelta(deltaRecord), true)
         }
 
         if (saved) {
