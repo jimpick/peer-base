@@ -14,8 +14,6 @@ const EventEmitter = require('events')
 const isUndefined = require('lodash/isUndefined')
 const pEvent = require('p-event')
 const peerToClockId = require('./peer-to-clock-id')
-const prettyClock = require('./pretty-clock')
-const chalk = require('chalk')
 
 // const RGA = require('delta-crdts').type('rga')
 // const chai = require('chai')
@@ -71,9 +69,6 @@ module.exports = class PushProtocol {
       for (let batch of batches) {
         const [clock, authorClock] = batch
         newRemoteClock = vectorclock.merge(newRemoteClock, vectorclock.sumAll(clock, authorClock))
-        const values = [...batch[2][2][0].values()].join('')
-        console.log(`  Batch: ${prettyClock(clock)} ` +
-                    `${prettyClock(authorClock)} "${values}"`)
         output.push(encode([await this._signAndEncryptDelta(batch)]))
       }
 
@@ -100,11 +95,6 @@ module.exports = class PushProtocol {
       // If we're in lazy mode, just send the clock (no state)
       if (!pushing) {
         dbg('in lazy mode so only sending clock to %s', remotePeerId)
-        console.log(chalk.cyan(
-          `Jim ${this._peerId().slice(-3)} -> ${remotePeerId.slice(-3)} ` +
-          'push lazy ' +
-          prettyClock(this._shared.clock())
-        ) + ' (Send clock)')
         sendClock()
         return
       }
@@ -112,45 +102,24 @@ module.exports = class PushProtocol {
       // We're in eager mode so send state
       this._replication.sending(remotePeerId, myClock, isPinner)
       dbg('pushing to %s', remotePeerId)
-      /*
-      console.log('Jim', this._peerId().slice(-3), '->', remotePeerId.slice(-3),
-                  'push eager1',
-                  prettyClock(myClock))
-      */
 
       // If the remote is a pinner, it can't read deltas so send the entire
       // state
       if (isPinner) {
-        dbg('remote %s is a pinner - sending entire state')
+        dbg('remote %s is a pinner - sending entire state', remotePeerId)
         remoteClock = await pushState()
         return
       }
 
       // If this peer is not a pinner we may have deltas to send
       if (!this._options.replicateOnly) {
-        console.log(chalk.blue(
-          `Jim ${this._peerId().slice(-3)} -> ${remotePeerId.slice(-3)} ` +
-          'push batches ' +
-          prettyClock(this._shared.clock()) + ' -> ' +
-          prettyClock(remoteClock)
-        ) + ' (Push batches)')
         remoteClock = vectorclock.merge(remoteClock, await pushDeltaBatches(remoteClock))
       }
 
-      /*
-      console.log('Jim', this._peerId().slice(-3), '->', remotePeerId.slice(-3),
-                  'push eager2',
-                  prettyClock(remoteClock))
-      */
       // If the remote still needs an update (even after sending the deltas
       // above), send the full state
       if (remoteNeedsUpdate(myClock, remoteClock)) {
         dbg('deltas were not enough to %s. Still need to send entire state', remotePeerId)
-        console.log(chalk.blue(
-          `Jim ${this._peerId().slice(-3)} -> ${remotePeerId.slice(-3)} ` +
-          'push eager3 ' +
-          prettyClock(remoteClock)
-        ) + ' (Send state)')
         remoteClock = vectorclock.merge(remoteClock, await pushState())
       } else {
         dbg('remote %s does not need update', remotePeerId)
@@ -220,9 +189,6 @@ module.exports = class PushProtocol {
       dbg('got message from %s:', remotePeerId, message)
       const wasPushing = pushing
       const [newRemoteClock, startLazy, startEager, _isPinner] = message
-      /*
-      console.log('Jim', remotePeerId.slice(-3), '<-', this._peerId().slice(-3),
-                  'push incoming') */
 
       // Switch to lazy mode
       if (startLazy) {
@@ -255,17 +221,16 @@ module.exports = class PushProtocol {
       // If the remote sent us its clock, update our local copy
       if (newRemoteClock) {
         let clock
-        console.log('Jim', this._peerId().slice(-3), '<-', remotePeerId.slice(-3),
-                    'push incoming',
-                    prettyClock(this._shared.clock()) + ' <- ' +
-                    prettyClock(newRemoteClock))
         // If the remote is a pinner, assume its clock is authoritative.
         // If remote is asking us to start pushing, we're going to start
         // from the remote clock.
         const overwriteRemoteClock = isPinner || (!wasPushing && pushing)
         if (overwriteRemoteClock) {
-          remoteClock = newRemoteClock
-          clock = this._clocks.setFor(remotePeerId, newRemoteClock)
+          queue.clear()
+          queue.add(() => {
+            remoteClock = newRemoteClock
+            clock = this._clocks.setFor(remotePeerId, newRemoteClock)
+          })
         } else {
           // If the remote is a regular peer, just merge in the remote clock
           remoteClock = vectorclock.merge(remoteClock, newRemoteClock)
