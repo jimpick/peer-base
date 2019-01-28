@@ -32,7 +32,7 @@ module.exports = class Clocks extends EventEmitter {
   }
 
   getFor (peerId) {
-    return this._clocks.get(peerId) || {[peerToClockId(peerId)]: 0}
+    return this._clocks.get(peerId) || { [peerToClockId(peerId)]: 0 }
   }
 
   takeDown (peerId) {
