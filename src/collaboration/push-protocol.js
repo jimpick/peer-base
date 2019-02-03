@@ -72,8 +72,10 @@ module.exports = class PushProtocol {
         const [clock, authorClock] = batch
         newRemoteClock = vectorclock.merge(newRemoteClock, vectorclock.sumAll(clock, authorClock))
         const values = [...batch[2][2][0].values()].join('')
+        /*
         console.log(`  Batch: ${prettyClock(clock)} ` +
                     `${prettyClock(authorClock)} "${values}"`)
+                    */
         output.push(encode([await this._signAndEncryptDelta(batch)]))
       }
 
@@ -100,11 +102,13 @@ module.exports = class PushProtocol {
       // If we're in lazy mode, just send the clock (no state)
       if (!pushing) {
         dbg('in lazy mode so only sending clock to %s', remotePeerId)
+        /*
         console.log(chalk.cyan(
           `Jim ${this._peerId().slice(-3)} -> ${remotePeerId.slice(-3)} ` +
           'push lazy ' +
           prettyClock(this._shared.clock())
         ) + ' (Send clock)')
+        */
         sendClock()
         return
       }
@@ -128,12 +132,14 @@ module.exports = class PushProtocol {
 
       // If this peer is not a pinner we may have deltas to send
       if (!this._options.replicateOnly) {
+        /*
         console.log(chalk.blue(
           `Jim ${this._peerId().slice(-3)} -> ${remotePeerId.slice(-3)} ` +
           'push batches ' +
           prettyClock(this._shared.clock()) + ' -> ' +
           prettyClock(remoteClock)
         ) + ' (Push batches)')
+        */
         remoteClock = vectorclock.merge(remoteClock, await pushDeltaBatches(remoteClock))
       }
 
@@ -146,11 +152,13 @@ module.exports = class PushProtocol {
       // above), send the full state
       if (remoteNeedsUpdate(myClock, remoteClock)) {
         dbg('deltas were not enough to %s. Still need to send entire state', remotePeerId)
+        /*
         console.log(chalk.blue(
           `Jim ${this._peerId().slice(-3)} -> ${remotePeerId.slice(-3)} ` +
           'push eager3 ' +
           prettyClock(remoteClock)
         ) + ' (Send state)')
+        */
         remoteClock = vectorclock.merge(remoteClock, await pushState())
       } else {
         dbg('remote %s does not need update', remotePeerId)
@@ -255,10 +263,12 @@ module.exports = class PushProtocol {
       // If the remote sent us its clock, update our local copy
       if (newRemoteClock) {
         let clock
+        /*
         console.log('Jim', this._peerId().slice(-3), '<-', remotePeerId.slice(-3),
                     'push incoming',
                     prettyClock(this._shared.clock()) + ' <- ' +
                     prettyClock(newRemoteClock))
+                    */
         // If the remote is a pinner, assume its clock is authoritative.
         // If remote is asking us to start pushing, we're going to start
         // from the remote clock.

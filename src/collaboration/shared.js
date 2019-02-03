@@ -44,9 +44,11 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       const authorClock = vectorclock.increment({}, clockId)
       const deltaRecord = [previousClock, authorClock, [name, crdtType.typeName, delta]]
       pushDelta(deltaRecord)
+      /*
       console.log('Jim applyAndPushDelta previousClock', prettyClock(previousClock))
       console.log('Jim applyAndPushDelta authorClock', prettyClock(authorClock))
       console.log('Jim applyAndPushDelta newClock', prettyClock(newClock))
+      */
       onClockChanged(newClock)
     } else {
       collaboration.parent.shared.pushDeltaForSub(name, crdtType.typeName, delta)
@@ -122,9 +124,11 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
     const newClock = vectorclock.increment(previousClock, clockId)
     const authorClock = vectorclock.increment({}, clockId)
     const deltaRecord = [previousClock, authorClock, [name, type, delta]]
+    /*
     console.log('Jim pushDeltaForSub previousClock', prettyClock(previousClock))
     console.log('Jim pushDeltaForSub authorClock', prettyClock(authorClock))
     console.log('Jim pushDeltaForSub newClock', prettyClock(newClock))
+    */
     pushDelta(deltaRecord)
     onClockChanged(newClock)
   }
@@ -156,10 +160,12 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       apply(delta)
       onClockChanged(newClock)
       const after = crdtType.value(state).join('')
+      /*
       console.log(chalk.yellow(`State: ${id.slice(-3)} ${after.length} ` +
                   `${prettyClock(newClock)}`))
       console.log(`  Before: "${before}"`)
       console.log(`  After: "${after}"`)
+      */
       return newClock
     } else if (typeName) {
       return collaboration.sub(forName, typeName)
@@ -179,41 +185,46 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
   }
 
   shared.deltas = (since = {}, targetPeerId) => {
-    console.log('Jim shared.deltas filtering')
+    // console.log('Jim shared.deltas filtering')
     return deltas.filter((deltaRecord) => {
       if (vectorclock.isDeltaInteresting(deltaRecord, since, targetPeerId)) {
         const [previousClock, authorClock] = deltaRecord
         const [, , [, , delta]] = deltaRecord
+        /*
         console.log(`Jim Interesting S: ${prettyClock(since)} ` +
                     `C: ${prettyClock(previousClock)} ` +
                     `${prettyClock(authorClock)} ` +
                     `"${[...delta[0].values()].join('')}"`)
+                    */
         since = vectorclock.merge(since, vectorclock.sumAll(previousClock, authorClock))
         return true
       }
       const [previousClock, authorClock] = deltaRecord
       const [, , [, , delta]] = deltaRecord
+      /*
       console.log(`Jim Not Intrstg S: ${prettyClock(since)} ` +
                   `C: ${prettyClock(previousClock)} ` +
                   `${prettyClock(authorClock)} ` +
                   `"${[...delta[0].values()].join('')}"`)
-
+      */
       return false
     })
   }
 
   shared.deltaBatches = (_since = {}, targetPeerId) => {
     let since = _since
-    console.log('Jim deltaBatches since: ', prettyClock(since))
+    // console.log('Jim deltaBatches since: ', prettyClock(since))
     const deltas = shared.deltas(since, targetPeerId)
     let mainBatch
     const batches = []
     deltas.forEach((deltaRecord) => {
       const [deltaPreviousClock, deltaAuthorClock, [deltaName, , delta]] = deltaRecord
+      /*
       console.log(`  Delta: ` +
                   prettyClock(deltaPreviousClock) + ' ' +
                   prettyClock(deltaAuthorClock) + ' ' +
                   `"${[...delta[0].values()].join('')}"`)
+                  */
       if (deltaName !== name) {
         if (mainBatch) {
           mainBatch = undefined
@@ -265,10 +276,12 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       state = s
     } else {
       const newState = crdtType.join.call(changeEmitter, state, s)
+      /*
       console.log('Peer:', id.slice(-3))
       console.log('Data before:', encode(state).toString('base64'))
       console.log('Diff:', encode(s).toString('base64'))
       console.log('Data after:', encode(newState).toString('base64'))
+      */
       if (crdtType.incrementalValue) {
         assert(valueCache)
         valueCache = crdtType.incrementalValue(state, newState, s, valueCache)
@@ -277,8 +290,9 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       shared.emit('delta', s, fromSelf)
 
       debug('%s: new state after join is', id, state)
-      // const value = crdtType.value(state).join('')
+      const value = crdtType.value(state).join('')
       // console.log(`${id.slice(-3)} ${value.length} ${value}`)
+      // console.log(`${id.slice(-3)} ${value.length}`)
       /*
       console.log(`State: ${id.slice(-3)} ${value.length} ` +
                   `${prettyClock(shared.clock())}`)
