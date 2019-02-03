@@ -230,6 +230,8 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
         return
       }
 
+      const [oldPreviousClock, oldAuthorClock, [, , oldDelta]] = mainBatch
+
       // join delta with current batch
       const oldClock = vectorclock.sumAll(oldPreviousClock, oldAuthorClock)
       const deltaClock = vectorclock.sumAll(deltaPreviousClock, deltaAuthorClock)
