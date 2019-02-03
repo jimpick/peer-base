@@ -5,6 +5,12 @@ const vectorclock = require('vectorclock')
 exports.compare = vectorclock.compare
 
 exports.isIdentical = (a, b) => {
+  if (!a && !b) {
+    return true
+  }
+  if (!a || !b) {
+    return false
+  }
   const keys = new Set([...Object.keys(a), ...Object.keys(b)])
 
   for (let key of keys) {
@@ -151,4 +157,40 @@ exports.diff = (a, b) => {
     }
   }
   return result
+}
+
+exports.areDeltasJoint = (...deltas) => {
+  const dimensions = new Set()
+  for (let deltaRecord of deltas) {
+    const [startVec, moveVec] = deltaRecord
+    let dims = [...Object.keys(startVec), ...Object.keys(moveVec)]
+    for (let dim of dims) {
+      dimensions.add(dim)
+    }
+  }
+
+  for (let dimension of dimensions) {
+    let lowerBound = 0
+    let upperBound = Infinity
+
+    for (let delta of deltas) {
+      const [startVec, moveVec] = delta
+      const start = startVec[dimension] || 0
+      const move = moveVec[dimension] || 0
+      const end = start + move
+
+      if (start > lowerBound) {
+        lowerBound = start
+      }
+      if (end < upperBound) {
+        upperBound = end
+      }
+    }
+
+    if (lowerBound > upperBound) {
+      return false
+    }
+  }
+
+  return true
 }

@@ -178,10 +178,10 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
     return (vectorclock.compare(otherClock, clock) < 0) || vectorclock.isIdentical(otherClock, clock)
   }
 
-  shared.deltas = (since = {}) => {
+  shared.deltas = (since = {}, targetPeerId) => {
     console.log('Jim shared.deltas filtering')
     return deltas.filter((deltaRecord) => {
-      if (vectorclock.isDeltaInteresting(deltaRecord, since)) {
+      if (vectorclock.isDeltaInteresting(deltaRecord, since, targetPeerId)) {
         const [previousClock, authorClock] = deltaRecord
         const [, , [, , delta]] = deltaRecord
         console.log(`Jim Interesting S: ${prettyClock(since)} ` +
@@ -202,64 +202,47 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
     })
   }
 
-  shared.deltaBatches = (_since = {}) => {
+  shared.deltaBatches = (_since = {}, targetPeerId) => {
     let since = _since
     console.log('Jim deltaBatches since: ', prettyClock(since))
-    const deltas = shared.deltas(since)
+    const deltas = shared.deltas(since, targetPeerId)
     let mainBatch
     const batches = []
-    try {
-      deltas.forEach((deltaRecord) => {
-        const [deltaPreviousClock, deltaAuthorClock, [deltaName, , delta]] = deltaRecord
-        console.log(`  Delta: ` +
-                    prettyClock(deltaPreviousClock) + ' ' +
-                    prettyClock(deltaAuthorClock) + ' ' +
-                    `"${[...delta[0].values()].join('')}"`)
-        if (deltaName !== name) {
-          if (mainBatch) {
-            mainBatch = undefined
-          }
-          batches.push(deltaRecord)
-          return
+    deltas.forEach((deltaRecord) => {
+      const [deltaPreviousClock, deltaAuthorClock, [deltaName, , delta]] = deltaRecord
+      console.log(`  Delta: ` +
+                  prettyClock(deltaPreviousClock) + ' ' +
+                  prettyClock(deltaAuthorClock) + ' ' +
+                  `"${[...delta[0].values()].join('')}"`)
+      if (deltaName !== name) {
+        if (mainBatch) {
+          mainBatch = undefined
         }
-
-        // main batch
-        if (!mainBatch) {
-          mainBatch = deltaRecord
-          batches.push(mainBatch)
-          return
-        }
-
-        const [oldPreviousClock, oldAuthorClock, [, , oldDelta]] = mainBatch
-
-        // join delta with current batch
-        const oldClock = vectorclock.sumAll(oldPreviousClock, oldAuthorClock)
-        const deltaClock = vectorclock.sumAll(deltaPreviousClock, deltaAuthorClock)
-        const newClock = vectorclock.merge(oldClock, deltaClock)
-
-        const newPreviousClock = vectorclock.minimum(oldPreviousClock, deltaPreviousClock)
-        if (!vectorclock.doesSecondHaveFirst(_since, newPreviousClock)) {
-          const rewind = new Error('Broaden search to earlier clock')
-          rewind.since = newPreviousClock
-          throw rewind
-        }
-
-        const newAuthorClock = vectorclock.subtract(newPreviousClock, newClock)
-
-        const newDelta = crdtType.join.call(voidChangeEmitter, oldDelta, delta)
-
-        mainBatch[0] = newPreviousClock
-        mainBatch[1] = newAuthorClock
-        mainBatch[2][2] = newDelta
-      })
-    } catch (e) {
-      if (e.message === 'Broaden search to earlier clock') {
-        console.log('Jim rewind', prettyClock(e.since))
-        return shared.deltaBatches(e.since)
-      } else {
-        throw e
+        batches.push(deltaRecord)
+        return
       }
-    }
+
+      // main batch
+      const startNewBatch = !mainBatch || !vectorclock.areDeltasJoint(mainBatch, deltaRecord)
+      if (startNewBatch) {
+        mainBatch = deltaRecord
+        batches.push(mainBatch)
+        return
+      }
+
+      // join delta with current batch
+      const oldClock = vectorclock.sumAll(oldPreviousClock, oldAuthorClock)
+      const deltaClock = vectorclock.sumAll(deltaPreviousClock, deltaAuthorClock)
+      const newClock = vectorclock.merge(oldClock, deltaClock)
+      const newPreviousClock = vectorclock.minimum(oldPreviousClock, deltaPreviousClock)
+      const newAuthorClock = vectorclock.subtract(newPreviousClock, newClock)
+
+      const newDelta = crdtType.join.call(voidChangeEmitter, oldDelta, delta)
+
+      mainBatch[0] = newPreviousClock
+      mainBatch[1] = newAuthorClock
+      mainBatch[2][2] = newDelta
+    })
 
     return batches
   }
