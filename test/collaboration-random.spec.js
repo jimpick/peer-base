@@ -13,9 +13,9 @@ const debug = require('debug')('peer-base:test:collaboration-random')
 
 const chalk = require('chalk')
 describe('collaboration with random changes', function () {
-  const peerCount = process.browser ? 10 : 10 
+  const peerCount = process.browser ? 10 : 3
   // const peerCount = process.browser ? 10 : 10
-  const charsPerPeer = 50
+  const charsPerPeer = 30
   // const charsPerPeer = 200
   this.timeout(2000000 * peerCount)
 

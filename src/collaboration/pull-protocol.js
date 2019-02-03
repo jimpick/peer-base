@@ -66,19 +66,16 @@ module.exports = class PullProtocol {
           const [previousClock, authorClock] = deltaRecord
           delta = deltaRecord[2]
           clock = vectorclock.sumAll(previousClock, authorClock)
-          /*
           console.log(chalk.red(
             `Jim ${this._peerId().slice(-3)} <- ${remotePeerId.slice(-3)} ` +
             'pull incoming ' +
             prettyClock(this._shared.clock()) + ' <- ' + prettyClock(clock) +
             ' (delta)'
           ))
-          */
          } else if (newStates) {
           clock = newStates[0]
           states = newStates[1]
           if (states && Object.keys(clock) > 0) {
-            /*
             console.log(chalk.red(
               'Jim', this._peerId().slice(-3), '<-', remotePeerId.slice(-3),
               `Jim ${this._peerId().slice(-3)} <- ${remotePeerId.slice(-3)} ` +
@@ -86,7 +83,6 @@ module.exports = class PullProtocol {
               prettyClock(this._shared.clock()) + ' <- ' + prettyClock(clock) +
               ' (full state)'
             ))
-            */
           }
         }
 
@@ -135,14 +131,14 @@ module.exports = class PullProtocol {
           }
 
           const decryptedRootState = await this._decryptAndVerifyDelta(rootState)
-          // console.log('Jim Saving root state')
+          console.log('Jim Saving root state')
           saved = await this._shared.apply(decryptedRootState, false)
           if (saved) {
             for (let [collabName, collabState] of states) {
               if (collabName === null) {
                 continue // already processed root state
               }
-              // console.log('Jim Saving sub state', collabName)
+              console.log('Jim Saving sub state', collabName)
               await this._shared.apply(await this._decryptAndVerifyDelta(collabState), false, true)
             }
           }
@@ -153,16 +149,12 @@ module.exports = class PullProtocol {
           const previousClock = decrypted[0]
           const authorClock = decrypted[1]
           const values = [...decrypted[2][2][0].values()].join('')
-          /*
           console.log(chalk.red(
             `Jim ${this._peerId().slice(-3)} <- ${remotePeerId.slice(-3)} ` +
             'pull saving delta'
           ))
-          */
-          /*
           console.log(`  ${prettyClock(previousClock)} ` +
                       `${prettyClock(authorClock)} "${values}"`)
-                      */
           saved = await this._shared.apply(decrypted, true)
         }
 
