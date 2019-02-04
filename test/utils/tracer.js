@@ -16,6 +16,7 @@ const exporter = new jaeger.JaegerTraceExporter(jaegerOptions);
 
 tracing.start({
   samplingRate: 1,
+  plugins: [],
   exporter
 })
 
