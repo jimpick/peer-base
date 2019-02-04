@@ -9,13 +9,15 @@ const delay = require('delay')
 const PeerStar = require('../')
 const AppFactory = require('./utils/create-app')
 
+const tracer = require('./utils/tracer')
+
 const debug = require('debug')('peer-base:test:collaboration-random')
 
 const chalk = require('chalk')
 describe('collaboration with random changes', function () {
-  const peerCount = process.browser ? 10 : 3
+  const peerCount = process.browser ? 10 : 2
   // const peerCount = process.browser ? 10 : 10
-  const charsPerPeer = 30
+  const charsPerPeer = 5
   // const charsPerPeer = 200
   this.timeout(2000000 * peerCount)
 
@@ -41,6 +43,7 @@ describe('collaboration with random changes', function () {
   let swarm = []
   let collaborations
   let collaborationIds = new Map()
+  let rootSpans = []
 
   before(() => {
     const appName = AppFactory.createName()
@@ -52,14 +55,24 @@ describe('collaboration with random changes', function () {
     peerIndexes.push(i)
   }
 
-  before(() => Promise.all(peerIndexes.map(() => {
+  before(() => Promise.all(peerIndexes.map(async peerIndex => {
+    rootSpans[peerIndex] = await startRootSpan(peerIndex)
     const app = App()
     swarm.push(app)
     return app.start()
   })))
 
   after(() => Promise.all(peerIndexes.map(async (peerIndex) => {
-    return swarm[peerIndex] && swarm[peerIndex].stop()
+    if (swarm[peerIndex]) {
+      const promise = swarm[peerIndex].stop().then(() => {
+        const promise = new Promise(resolve => {
+          rootSpans[peerIndex].end()
+          setTimeout(resolve, 4000)
+        })
+        return promise
+      })
+      return promise
+    }
   })))
 
   before(async () => {
@@ -171,5 +184,21 @@ describe('collaboration with random changes', function () {
     function characterFrom (characters, index) {
       return characters[index % characters.length]
     }
+
   })
 })
+
+function startRootSpan (peerIndex) {
+  const promise = new Promise(resolve => {
+    setTimeout(() => {
+      tracer.startRootSpan({
+        name: 'peer'
+      }, resolve)
+    }, 1000)
+  })
+  .then(rootSpan => {
+    rootSpan.addAttribute('peerIndex', peerIndex)
+    return rootSpan
+  })
+  return promise
+}

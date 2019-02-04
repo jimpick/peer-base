@@ -35,6 +35,8 @@
   },
   "homepage": "https://github.com/peer-base/peer-base#readme",
   "dependencies": {
+    "@opencensus/core": "^0.0.8",
+    "@opencensus/exporter-jaeger": "^0.0.8",
     "asino": "~0.3.3",
     "big-integer": "^1.6.41",
     "browser-process-hrtime": "^1.0.0",
