@@ -43,7 +43,6 @@ describe('collaboration with random changes', function () {
   let swarm = []
   let collaborations
   let collaborationIds = new Map()
-  let rootSpans = []
 
   before(() => {
     const appName = AppFactory.createName()
@@ -56,8 +55,9 @@ describe('collaboration with random changes', function () {
   }
 
   before(() => Promise.all(peerIndexes.map(async peerIndex => {
-    rootSpans[peerIndex] = await startRootSpan(peerIndex)
+    const rootSpan = await startRootSpan(peerIndex)
     const app = App()
+    app.rootSpan = rootSpan
     swarm.push(app)
     return app.start()
   })))
@@ -66,7 +66,7 @@ describe('collaboration with random changes', function () {
     if (swarm[peerIndex]) {
       const promise = swarm[peerIndex].stop().then(() => {
         const promise = new Promise(resolve => {
-          rootSpans[peerIndex].end()
+          swarm[peerIndex].rootSpan.end()
           setTimeout(resolve, 4000)
         })
         return promise
@@ -81,7 +81,16 @@ describe('collaboration with random changes', function () {
 
   it('can be created', async () => {
     collaborations = await Promise.all(
-      swarm.map((peer) => peer.app.collaborate('test random collaboration', 'rga', collaborationOptions)))
+      swarm.map((peer) => peer.app.collaborate(
+        'test random collaboration',
+        'rga',
+        {
+          ...collaborationOptions,
+          tracingSpan: peer.rootSpan,
+          tracingDataLogger: console.log
+        }
+      ))
+    )
     expect(collaborations.length).to.equal(peerCount)
     await Promise.all(collaborations.map(async c => {
       const id = (await c.app.ipfs.id()).id

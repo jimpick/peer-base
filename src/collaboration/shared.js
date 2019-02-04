@@ -26,6 +26,7 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
   let state = crdtType.initial()
   const memo = {}
   let valueCache
+  let traceDataIndex = 0
 
   const pushDelta = (delta) => {
     deltas.push(delta)
@@ -264,11 +265,14 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
     if (options.replicateOnly) {
       state = s
     } else {
+      const oldState = state
       const newState = crdtType.join.call(changeEmitter, state, s)
+      /*
       console.log('Peer:', id.slice(-3))
       console.log('Data before:', encode(state).toString('base64'))
       console.log('Diff:', encode(s).toString('base64'))
       console.log('Data after:', encode(newState).toString('base64'))
+      */
       if (crdtType.incrementalValue) {
         assert(valueCache)
         valueCache = crdtType.incrementalValue(state, newState, s, valueCache)
@@ -277,12 +281,29 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       shared.emit('delta', s, fromSelf)
 
       debug('%s: new state after join is', id, state)
-      // const value = crdtType.value(state).join('')
-      // console.log(`${id.slice(-3)} ${value.length} ${value}`)
-      /*
-      console.log(`State: ${id.slice(-3)} ${value.length} ` +
-                  `${prettyClock(shared.clock())}`)
-                  */
+      try {
+        const {
+          tracingSpan: span,
+          tracingDataLogger: traceLog
+        } = collaboration._options
+        if (span) {
+          span.addAnnotation('collaboration.apply', {
+            id,
+            traceDataIndex
+          })
+        }
+        if (traceLog) {
+          traceLog(`${id}:${name}:before:${traceDataIndex} ` +
+            encode(oldState).toString('base64'))
+          traceLog(`${id}:${name}:delta:${traceDataIndex} ` +
+            encode(s).toString('base64'))
+          traceLog(`${id}:${name}:after:${traceDataIndex} ` +
+            encode(newState).toString('base64'))
+        }
+        traceDataIndex++
+      } catch (err) {
+        console.error('Jim err', err)
+      }
       try {
         changeEmitter.emitAll()
       } catch (err) {

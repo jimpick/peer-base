@@ -9,7 +9,7 @@ const jaegerOptions = {
   tags: [{key: 'peer-base', value: '0.0.1'}],
   bufferTimeout: 3000, // time in milliseconds
   logger: core.logger.logger('debug'),
-  maxPacketSize: 100000
+  // maxPacketSize: 100000
 };
 const exporter = new jaeger.JaegerTraceExporter(jaegerOptions);
 
