@@ -161,6 +161,17 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
                   `${prettyClock(newClock)}`))
       console.log(`  Before: "${before}"`)
       console.log(`  After: "${after}"`)
+      const {
+        tracingSpan: span,
+        tracingDataLogger: traceLog
+      } = collaboration._options
+      if (span) {
+        span.addAnnotation('collaboration.shared.apply', {
+          z1_value_before: before,
+          z2_value_after: after,
+          z3_prettyClock: prettyClock(newClock)
+        })
+      }
       return newClock
     } else if (typeName) {
       return collaboration.sub(forName, typeName)
@@ -281,29 +292,24 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       shared.emit('delta', s, fromSelf)
 
       debug('%s: new state after join is', id, state)
-      try {
-        const {
-          tracingSpan: span,
-          tracingDataLogger: traceLog
-        } = collaboration._options
-        if (span) {
-          span.addAnnotation('collaboration.apply', {
-            id,
-            traceDataIndex
-          })
-        }
-        if (traceLog) {
-          traceLog(`${id}:${name}:before:${traceDataIndex} ` +
-            encode(oldState).toString('base64'))
-          traceLog(`${id}:${name}:delta:${traceDataIndex} ` +
-            encode(s).toString('base64'))
-          traceLog(`${id}:${name}:after:${traceDataIndex} ` +
-            encode(newState).toString('base64'))
-        }
-        traceDataIndex++
-      } catch (err) {
-        console.error('Jim err', err)
+      const {
+        tracingSpan: span,
+        tracingDataLogger: traceLog
+      } = collaboration._options
+      if (span) {
+        span.addAnnotation('collaboration.apply', {
+          traceDataIndex
+        })
       }
+      if (traceLog) {
+        traceLog(`${id}:${name}:before:${traceDataIndex} ` +
+          encode(oldState).toString('base64'))
+        traceLog(`${id}:${name}:delta:${traceDataIndex} ` +
+          encode(s).toString('base64'))
+        traceLog(`${id}:${name}:after:${traceDataIndex} ` +
+          encode(newState).toString('base64'))
+      }
+      traceDataIndex++
       try {
         changeEmitter.emitAll()
       } catch (err) {

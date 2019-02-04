@@ -3,11 +3,11 @@ const core = require('@opencensus/core')
 const jaeger = require('@opencensus/exporter-jaeger')
 
 const jaegerOptions = {
-  serviceName: 'opencensus-exporter-jaeger',
+  serviceName: 'peer-base',
   host: 'localhost',
   port: 6832,
   tags: [{key: 'peer-base', value: '0.0.1'}],
-  bufferTimeout: 3000, // time in milliseconds
+  bufferTimeout: 1000, // time in milliseconds
   logger: core.logger.logger('debug'),
   // maxPacketSize: 100000
 };

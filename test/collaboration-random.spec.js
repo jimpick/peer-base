@@ -15,6 +15,7 @@ const debug = require('debug')('peer-base:test:collaboration-random')
 
 const chalk = require('chalk')
 describe('collaboration with random changes', function () {
+  const testIndex = Date.now()
   const peerCount = process.browser ? 10 : 2
   // const peerCount = process.browser ? 10 : 10
   const charsPerPeer = 5
@@ -55,7 +56,7 @@ describe('collaboration with random changes', function () {
   }
 
   before(() => Promise.all(peerIndexes.map(async peerIndex => {
-    const rootSpan = await startRootSpan(peerIndex)
+    const rootSpan = await startRootSpan(testIndex, peerIndex)
     const app = App()
     app.rootSpan = rootSpan
     swarm.push(app)
@@ -67,13 +68,21 @@ describe('collaboration with random changes', function () {
       const promise = swarm[peerIndex].stop().then(() => {
         const promise = new Promise(resolve => {
           swarm[peerIndex].rootSpan.end()
-          setTimeout(resolve, 4000)
+          setTimeout(resolve, 1500)
         })
         return promise
       })
       return promise
     }
   })))
+
+  after(() => {
+    console.log('Test Index:', testIndex)
+    console.log(`http://localhost:16686/search?limit=20` +
+                `&lookback=1h&maxDuration&minDuration&operation=peer` +
+                `&service=peer-base` +
+                `&tags=%7B%22testIndex%22%3A%22${testIndex}%22%7D`)
+  })
 
   before(async () => {
     collaborationOptions.keys = await PeerStar.keys.generate()
@@ -87,7 +96,10 @@ describe('collaboration with random changes', function () {
         {
           ...collaborationOptions,
           tracingSpan: peer.rootSpan,
-          tracingDataLogger: console.log
+          tracingDataLogger: (...args) => {
+            // FIXME: Save to file
+            // console.log(...args)
+          }
         }
       ))
     )
@@ -95,6 +107,7 @@ describe('collaboration with random changes', function () {
     await Promise.all(collaborations.map(async c => {
       const id = (await c.app.ipfs.id()).id
       collaborationIds.set(c, id)
+      c._options.tracingSpan.addAttribute('id', id)
     }))
     // await waitForMembers(collaborations)
   })
@@ -197,7 +210,7 @@ describe('collaboration with random changes', function () {
   })
 })
 
-function startRootSpan (peerIndex) {
+function startRootSpan (testIndex, peerIndex) {
   const promise = new Promise(resolve => {
     setTimeout(() => {
       tracer.startRootSpan({
@@ -206,6 +219,7 @@ function startRootSpan (peerIndex) {
     }, 1000)
   })
   .then(rootSpan => {
+    rootSpan.addAttribute('testIndex', `${testIndex}`)
     rootSpan.addAttribute('peerIndex', peerIndex)
     return rootSpan
   })
