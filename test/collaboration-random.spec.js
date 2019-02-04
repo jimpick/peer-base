@@ -10,6 +10,7 @@ const PeerStar = require('../')
 const AppFactory = require('./utils/create-app')
 
 const tracer = require('./utils/tracer')
+let rootSpan
 
 const debug = require('debug')('peer-base:test:collaboration-random')
 
@@ -55,28 +56,35 @@ describe('collaboration with random changes', function () {
     peerIndexes.push(i)
   }
 
-  before(() => Promise.all(peerIndexes.map(async peerIndex => {
-    const rootSpan = await startRootSpan(testIndex, peerIndex)
-    const app = App()
-    app.rootSpan = rootSpan
-    swarm.push(app)
-    return app.start()
-  })))
+  before(async () => {
+    rootSpan = await startRootSpan(testIndex)
+    console.log('Started rootSpan')
+    Promise.all(peerIndexes.map(peerIndex => {
+      console.log('Starting', peerIndex, tracer.currentRootSpan)
+      const app = App()
+      swarm.push(app)
+      return app.start()
+    }))
+  })
 
-  after(() => Promise.all(peerIndexes.map(async (peerIndex) => {
+  after(() => Promise.all(peerIndexes.map((peerIndex) => {
+    console.log('Jim end1')
     if (swarm[peerIndex]) {
-      const promise = swarm[peerIndex].stop().then(() => {
-        const promise = new Promise(resolve => {
-          swarm[peerIndex].rootSpan.end()
-          setTimeout(resolve, 1500)
-        })
-        return promise
-      })
-      return promise
+      return swarm[peerIndex].stop()
     }
   })))
 
   after(() => {
+    console.log('Jim end2')
+    const promise = new Promise(resolve => {
+      rootSpan.end()
+      setTimeout(resolve, 1500)
+    })
+    return promise
+  })
+
+  after(() => {
+    console.log('Jim end3')
     console.log('Test Index:', testIndex)
     console.log(`http://localhost:16686/search?limit=20` +
                 `&lookback=1h&maxDuration&minDuration&operation=peer` +
@@ -95,7 +103,8 @@ describe('collaboration with random changes', function () {
         'rga',
         {
           ...collaborationOptions,
-          tracingSpan: peer.rootSpan,
+          tracer: tracer,
+          tracingSpan: rootSpan,
           tracingDataLogger: (...args) => {
             // FIXME: Save to file
             // console.log(...args)
@@ -210,18 +219,15 @@ describe('collaboration with random changes', function () {
   })
 })
 
-function startRootSpan (testIndex, peerIndex) {
-  const promise = new Promise(resolve => {
-    setTimeout(() => {
-      tracer.startRootSpan({
-        name: 'peer'
-      }, resolve)
-    }, 1000)
+async function startRootSpan (testIndex) {
+  await delay(1000)
+  const rootSpan2 = await new Promise(resolve => {
+    tracer.startRootSpan({ name: 'peer' }, rootSpan3 => {
+      console.log('Jim currentRootSpan', tracer.currentRootSpan)
+      resolve(rootSpan3)
+    })
   })
-  .then(rootSpan => {
-    rootSpan.addAttribute('testIndex', `${testIndex}`)
-    rootSpan.addAttribute('peerIndex', peerIndex)
-    return rootSpan
-  })
-  return promise
+  tracer.currentRootSpan = rootSpan2
+  rootSpan2.addAttribute('testIndex', `${testIndex}`)
+  return rootSpan2
 }

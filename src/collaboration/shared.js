@@ -39,15 +39,33 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
 
   const applyAndPushDelta = (delta) => {
     if (collaboration.isRoot()) {
+      let span
+      const { tracer } = collaboration._options
+      if (tracer) {
+        span = tracer.startChildSpan('collaboration.applyAndPushDelta')
+        span.start()
+      }
       const previousClock = clocks.getFor(id)
+      const before = crdtType.value(state).join('')
       apply(delta, true)
+      const after = crdtType.value(state).join('')
       const newClock = vectorclock.increment(previousClock, clockId)
       const authorClock = vectorclock.increment({}, clockId)
       const deltaRecord = [previousClock, authorClock, [name, crdtType.typeName, delta]]
       pushDelta(deltaRecord)
+      if (span) {
+        span.addAttribute('before', before)
+        span.addAttribute('after', after)
+        span.addAttribute('previousClock', prettyClock(previousClock))
+        span.addAttribute('authorClock', prettyClock(authorClock))
+        span.addAttribute('newClock', prettyClock(newClock))
+        span.end()
+      }
+      /*
       console.log('Jim applyAndPushDelta previousClock', prettyClock(previousClock))
       console.log('Jim applyAndPushDelta authorClock', prettyClock(authorClock))
       console.log('Jim applyAndPushDelta newClock', prettyClock(newClock))
+      */
       onClockChanged(newClock)
     } else {
       collaboration.parent.shared.pushDeltaForSub(name, crdtType.typeName, delta)
@@ -157,10 +175,12 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       apply(delta)
       onClockChanged(newClock)
       const after = crdtType.value(state).join('')
+      /*
       console.log(chalk.yellow(`State: ${id.slice(-3)} ${after.length} ` +
                   `${prettyClock(newClock)}`))
       console.log(`  Before: "${before}"`)
       console.log(`  After: "${after}"`)
+      */
       const {
         tracingSpan: span,
         tracingDataLogger: traceLog
@@ -297,9 +317,11 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
         tracingDataLogger: traceLog
       } = collaboration._options
       if (span) {
+        /*
         span.addAnnotation('collaboration.apply', {
           traceDataIndex
         })
+        */
       }
       if (traceLog) {
         traceLog(`${id}:${name}:before:${traceDataIndex} ` +
