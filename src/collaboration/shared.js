@@ -54,6 +54,7 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       const deltaRecord = [previousClock, authorClock, [name, crdtType.typeName, delta]]
       pushDelta(deltaRecord)
       if (span) {
+        span.addAttribute('peer', id)
         span.addAttribute('before', before)
         span.addAttribute('after', after)
         span.addAttribute('previousClock', prettyClock(previousClock))
@@ -312,17 +313,22 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       shared.emit('delta', s, fromSelf)
 
       debug('%s: new state after join is', id, state)
+      let span
       const {
-        tracingSpan: span,
+        tracer,
         tracingDataLogger: traceLog
       } = collaboration._options
-      if (span) {
-        /*
-        span.addAnnotation('collaboration.apply', {
-          traceDataIndex
-        })
-        */
+      if (tracer) {
+        span = tracer.startChildSpan('collaboration.apply')
+        span.start()
+        span.addAttribute('peer', id)
+        // span.addAttribute('traceDataIndex', traceDataIndex)
+        span.addAttribute('oldState', encode(oldState).toString('base64'))
+        span.addAttribute('delta', encode(s).toString('base64'))
+        span.addAttribute('newState', encode(newState).toString('base64'))
+        span.end()
       }
+      /*
       if (traceLog) {
         traceLog(`${id}:${name}:before:${traceDataIndex} ` +
           encode(oldState).toString('base64'))
@@ -332,6 +338,7 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
           encode(newState).toString('base64'))
       }
       traceDataIndex++
+      */
       try {
         changeEmitter.emitAll()
       } catch (err) {

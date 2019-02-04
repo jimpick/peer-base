@@ -7,9 +7,10 @@ const jaegerOptions = {
   host: 'localhost',
   port: 6832,
   tags: [{key: 'peer-base', value: '0.0.1'}],
-  bufferTimeout: 1000, // time in milliseconds
+  bufferTimeout: 500, // time in milliseconds
   logger: core.logger.logger('debug'),
-  // maxPacketSize: 100000
+  bufferSize: 4000,
+  maxPacketSize: 5000
 };
 const exporter = new jaeger.JaegerTraceExporter(jaegerOptions);
 

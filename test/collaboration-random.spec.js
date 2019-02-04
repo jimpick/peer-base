@@ -60,7 +60,7 @@ describe('collaboration with random changes', function () {
     rootSpan = await startRootSpan(testIndex)
     console.log('Started rootSpan')
     Promise.all(peerIndexes.map(peerIndex => {
-      console.log('Starting', peerIndex, tracer.currentRootSpan)
+      console.log('Starting', peerIndex)
       const app = App()
       swarm.push(app)
       return app.start()
@@ -223,7 +223,7 @@ async function startRootSpan (testIndex) {
   await delay(1000)
   const rootSpan2 = await new Promise(resolve => {
     tracer.startRootSpan({ name: 'peer' }, rootSpan3 => {
-      console.log('Jim currentRootSpan', tracer.currentRootSpan)
+      // console.log('Jim currentRootSpan', tracer.currentRootSpan)
       resolve(rootSpan3)
     })
   })
