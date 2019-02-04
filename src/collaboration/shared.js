@@ -26,7 +26,6 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
   let state = crdtType.initial()
   const memo = {}
   let valueCache
-  let traceDataIndex = 0
 
   const pushDelta = (delta) => {
     deltas.push(delta)
@@ -212,41 +211,59 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
   }
 
   shared.deltas = (since = {}, targetPeerId) => {
-    console.log('Jim shared.deltas filtering')
+    // console.log('Jim shared.deltas filtering')
     return deltas.filter((deltaRecord) => {
       if (vectorclock.isDeltaInteresting(deltaRecord, since, targetPeerId)) {
         const [previousClock, authorClock] = deltaRecord
         const [, , [, , delta]] = deltaRecord
+        /*
         console.log(`Jim Interesting S: ${prettyClock(since)} ` +
                     `C: ${prettyClock(previousClock)} ` +
                     `${prettyClock(authorClock)} ` +
                     `"${[...delta[0].values()].join('')}"`)
+                    */
         since = vectorclock.merge(since, vectorclock.sumAll(previousClock, authorClock))
         return true
       }
       const [previousClock, authorClock] = deltaRecord
       const [, , [, , delta]] = deltaRecord
+      /*
       console.log(`Jim Not Intrstg S: ${prettyClock(since)} ` +
                   `C: ${prettyClock(previousClock)} ` +
                   `${prettyClock(authorClock)} ` +
                   `"${[...delta[0].values()].join('')}"`)
+                  */
 
       return false
     })
   }
 
-  shared.deltaBatches = (_since = {}, targetPeerId) => {
+  shared.deltaBatches = (_since = {}, targetPeerId, span) => {
     let since = _since
-    console.log('Jim deltaBatches since: ', prettyClock(since))
+    if (span) {
+      //console.log('Jim deltaBatches since: ', prettyClock(since))
+      span.addAnnotation('shared.deltaBatches', {
+        since: prettyClock(since)
+      })
+    }
     const deltas = shared.deltas(since, targetPeerId)
     let mainBatch
     const batches = []
     deltas.forEach((deltaRecord) => {
       const [deltaPreviousClock, deltaAuthorClock, [deltaName, , delta]] = deltaRecord
-      console.log(`  Delta: ` +
-                  prettyClock(deltaPreviousClock) + ' ' +
-                  prettyClock(deltaAuthorClock) + ' ' +
-                  `"${[...delta[0].values()].join('')}"`)
+      if (span) {
+        /*
+        console.log(`  Delta: ` +
+                    prettyClock(deltaPreviousClock) + ' ' +
+                    prettyClock(deltaAuthorClock) + ' ' +
+                    `"${[...delta[0].values()].join('')}"`)
+                    */
+        span.addAnnotation('delta', {
+          _1_previousClock: prettyClock(deltaPreviousClock),
+          _2_authorClock: prettyClock(deltaAuthorClock),
+          _3_deltaValues: [...delta[0].values()].join('')
+        })
+      }
       if (deltaName !== name) {
         if (mainBatch) {
           mainBatch = undefined
@@ -298,7 +315,9 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       state = s
     } else {
       const oldState = state
+      const before = crdtType.value(state).join('')
       const newState = crdtType.join.call(changeEmitter, state, s)
+      const after = crdtType.value(newState).join('')
       /*
       console.log('Peer:', id.slice(-3))
       console.log('Data before:', encode(state).toString('base64'))
@@ -314,31 +333,18 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
 
       debug('%s: new state after join is', id, state)
       let span
-      const {
-        tracer,
-        tracingDataLogger: traceLog
-      } = collaboration._options
+      const { tracer } = collaboration._options
       if (tracer) {
         span = tracer.startChildSpan('collaboration.apply')
         span.start()
         span.addAttribute('peer', id)
-        // span.addAttribute('traceDataIndex', traceDataIndex)
         span.addAttribute('oldState', encode(oldState).toString('base64'))
         span.addAttribute('delta', encode(s).toString('base64'))
         span.addAttribute('newState', encode(newState).toString('base64'))
+        span.addAttribute('before', before)
+        span.addAttribute('after', after)
         span.end()
       }
-      /*
-      if (traceLog) {
-        traceLog(`${id}:${name}:before:${traceDataIndex} ` +
-          encode(oldState).toString('base64'))
-        traceLog(`${id}:${name}:delta:${traceDataIndex} ` +
-          encode(s).toString('base64'))
-        traceLog(`${id}:${name}:after:${traceDataIndex} ` +
-          encode(newState).toString('base64'))
-      }
-      traceDataIndex++
-      */
       try {
         changeEmitter.emitAll()
       } catch (err) {

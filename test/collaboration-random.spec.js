@@ -9,7 +9,7 @@ const delay = require('delay')
 const PeerStar = require('../')
 const AppFactory = require('./utils/create-app')
 
-const tracer = require('./utils/tracer')
+const { tracer, exporter } = require('./utils/tracer')
 let rootSpan
 
 const debug = require('debug')('peer-base:test:collaboration-random')
@@ -59,6 +59,7 @@ describe('collaboration with random changes', function () {
   before(async () => {
     rootSpan = await startRootSpan(testIndex)
     console.log('Started rootSpan')
+    await delay(1000)
     Promise.all(peerIndexes.map(peerIndex => {
       console.log('Starting', peerIndex)
       const app = App()
@@ -68,28 +69,22 @@ describe('collaboration with random changes', function () {
   })
 
   after(() => Promise.all(peerIndexes.map((peerIndex) => {
-    console.log('Jim end1')
     if (swarm[peerIndex]) {
       return swarm[peerIndex].stop()
     }
   })))
 
-  after(() => {
-    console.log('Jim end2')
-    const promise = new Promise(resolve => {
-      rootSpan.end()
-      setTimeout(resolve, 1500)
-    })
-    return promise
+  after(async () => {
+    rootSpan.end()
+    await delay(2000)
+    exporter.flush()
+    await delay(2000)
   })
 
   after(() => {
-    console.log('Jim end3')
+    console.log('TraceId:', rootSpan.traceId)
     console.log('Test Index:', testIndex)
-    console.log(`http://localhost:16686/search?limit=20` +
-                `&lookback=1h&maxDuration&minDuration&operation=peer` +
-                `&service=peer-base` +
-                `&tags=%7B%22testIndex%22%3A%22${testIndex}%22%7D`)
+    console.log(`http://localhost:16686/trace/${rootSpan.traceId}`)
   })
 
   before(async () => {

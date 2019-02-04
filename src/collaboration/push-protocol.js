@@ -65,13 +65,21 @@ module.exports = class PushProtocol {
     }
 
     // Send deltas to the remote peer
-    const pushDeltaBatches = async (peerClock) => {
-      const batches = this._shared.deltaBatches(peerClock, remotePeerId)
+    const pushDeltaBatches = async (peerClock, span) => {
+      const batches = this._shared.deltaBatches(peerClock, remotePeerId, span)
       let newRemoteClock = {}
       for (let batch of batches) {
         const [clock, authorClock] = batch
         newRemoteClock = vectorclock.merge(newRemoteClock, vectorclock.sumAll(clock, authorClock))
         const values = [...batch[2][2][0].values()].join('')
+        if (span) {
+          console.log('Jim1 addAnnotation Batch')
+          span.addAnnotation('Batch', {
+            _1_previousClock: prettyClock(clock),
+            _2_authorClock: prettyClock(authorClock),
+            _3_values: values
+          })
+        }
         console.log(`  Batch: ${prettyClock(clock)} ` +
                     `${prettyClock(authorClock)} "${values}"`)
         output.push(encode([await this._signAndEncryptDelta(batch)]))
@@ -128,13 +136,28 @@ module.exports = class PushProtocol {
 
       // If this peer is not a pinner we may have deltas to send
       if (!this._options.replicateOnly) {
+        let span
+        const { tracer } = this._collaboration._options
+        if (tracer) {
+          span = tracer.startChildSpan('push.batches')
+          span.addAttribute('from', this._peerId())
+          span.addAttribute('to', remotePeerId)
+          span.addAttribute('fromClock', prettyClock(this._shared.clock()))
+          span.addAttribute('toClock', prettyClock(remoteClock))
+          span.start()
+        }
+        /*
         console.log(chalk.blue(
           `Jim ${this._peerId().slice(-3)} -> ${remotePeerId.slice(-3)} ` +
           'push batches ' +
           prettyClock(this._shared.clock()) + ' -> ' +
           prettyClock(remoteClock)
         ) + ' (Push batches)')
-        remoteClock = vectorclock.merge(remoteClock, await pushDeltaBatches(remoteClock))
+        */
+        remoteClock = vectorclock.merge(remoteClock,
+          await pushDeltaBatches(remoteClock, span))
+        console.log('Jim span end')
+        span && span.end()
       }
 
       /*
