@@ -16,10 +16,10 @@ const debug = require('debug')('peer-base:test:collaboration-random')
 
 const chalk = require('chalk')
 describe('collaboration with random changes', function () {
-  const testIndex = Date.now()
-  const peerCount = process.browser ? 10 : 2
+  const unixTime = Date.now()
+  const peerCount = process.browser ? 10 : 3
   // const peerCount = process.browser ? 10 : 10
-  const charsPerPeer = 5
+  const charsPerPeer = 15
   // const charsPerPeer = 200
   this.timeout(2000000 * peerCount)
 
@@ -57,11 +57,10 @@ describe('collaboration with random changes', function () {
   }
 
   before(async () => {
-    rootSpan = await startRootSpan(testIndex)
-    console.log('Started rootSpan')
+    rootSpan = await startRootSpan(unixTime)
     await delay(1000)
     Promise.all(peerIndexes.map(peerIndex => {
-      console.log('Starting', peerIndex)
+      // console.log('Starting', peerIndex)
       const app = App()
       swarm.push(app)
       return app.start()
@@ -77,13 +76,13 @@ describe('collaboration with random changes', function () {
   after(async () => {
     rootSpan.end()
     await delay(2000)
-    exporter.flush()
-    await delay(2000)
+    // exporter.flush()
+    // await delay(2000)
   })
 
   after(() => {
-    console.log('TraceId:', rootSpan.traceId)
-    console.log('Test Index:', testIndex)
+    // console.log('TraceId:', rootSpan.traceId)
+    // console.log('Unix Time:', unixTime)
     console.log(`http://localhost:16686/trace/${rootSpan.traceId}`)
   })
 
@@ -214,7 +213,7 @@ describe('collaboration with random changes', function () {
   })
 })
 
-async function startRootSpan (testIndex) {
+async function startRootSpan (unixTime) {
   await delay(1000)
   const rootSpan2 = await new Promise(resolve => {
     tracer.startRootSpan({ name: 'peer' }, rootSpan3 => {
@@ -223,6 +222,6 @@ async function startRootSpan (testIndex) {
     })
   })
   tracer.currentRootSpan = rootSpan2
-  rootSpan2.addAttribute('testIndex', `${testIndex}`)
+  rootSpan2.addAttribute('unixTime', `${unixTime}`)
   return rootSpan2
 }

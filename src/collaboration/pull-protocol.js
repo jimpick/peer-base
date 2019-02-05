@@ -66,15 +66,18 @@ module.exports = class PullProtocol {
           const [previousClock, authorClock] = deltaRecord
           delta = deltaRecord[2]
           clock = vectorclock.sumAll(previousClock, authorClock)
+          /*
           console.log(chalk.red(
             `Jim ${this._peerId().slice(-3)} <- ${remotePeerId.slice(-3)} ` +
             'pull incoming ' +
             prettyClock(this._shared.clock()) + ' <- ' + prettyClock(clock) +
             ' (delta)'
           ))
+          */
          } else if (newStates) {
           clock = newStates[0]
           states = newStates[1]
+          /*
           if (states && Object.keys(clock) > 0) {
             console.log(chalk.red(
               'Jim', this._peerId().slice(-3), '<-', remotePeerId.slice(-3),
@@ -84,6 +87,7 @@ module.exports = class PullProtocol {
               ' (full state)'
             ))
           }
+          */
         }
 
         // If we didn't get a clock, then we can't make any assumptions, so
@@ -149,13 +153,35 @@ module.exports = class PullProtocol {
           const previousClock = decrypted[0]
           const authorClock = decrypted[1]
           const values = [...decrypted[2][2][0].values()].join('')
+          let span
+          const { tracer } = this._collaboration._options
+          if (tracer) {
+            const to = this._peerId()
+            const from = remotePeerId
+            const before = this._shared.value().join('')
+            span = tracer.startChildSpan(
+              `pull.saveDelta ${to.slice(-3)} <- ${from.slice(-3)} ` +
+              `"${values}"`
+            )
+            span.addAttribute('to', to)
+            span.addAttribute('from', from)
+            span.addAttribute('before', before)
+
+          }
+          /*
           console.log(chalk.red(
             `Jim ${this._peerId().slice(-3)} <- ${remotePeerId.slice(-3)} ` +
             'pull saving delta'
           ))
           console.log(`  ${prettyClock(previousClock)} ` +
                       `${prettyClock(authorClock)} "${values}"`)
-          saved = await this._shared.apply(decrypted, true)
+          */
+          saved = await this._shared.apply(decrypted, true, false, span)
+          if (span) {
+            const after = this._shared.value().join('')
+            span.addAttribute('after', after)
+            span.end()
+          }
         }
 
         if (saved) {

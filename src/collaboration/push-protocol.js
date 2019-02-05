@@ -73,15 +73,16 @@ module.exports = class PushProtocol {
         newRemoteClock = vectorclock.merge(newRemoteClock, vectorclock.sumAll(clock, authorClock))
         const values = [...batch[2][2][0].values()].join('')
         if (span) {
-          console.log('Jim1 addAnnotation Batch')
           span.addAnnotation('Batch', {
             _1_previousClock: prettyClock(clock),
             _2_authorClock: prettyClock(authorClock),
             _3_values: values
           })
         }
+        /*
         console.log(`  Batch: ${prettyClock(clock)} ` +
                     `${prettyClock(authorClock)} "${values}"`)
+                    */
         output.push(encode([await this._signAndEncryptDelta(batch)]))
       }
 
@@ -108,11 +109,13 @@ module.exports = class PushProtocol {
       // If we're in lazy mode, just send the clock (no state)
       if (!pushing) {
         dbg('in lazy mode so only sending clock to %s', remotePeerId)
+        /*
         console.log(chalk.cyan(
           `Jim ${this._peerId().slice(-3)} -> ${remotePeerId.slice(-3)} ` +
           'push lazy ' +
           prettyClock(this._shared.clock())
         ) + ' (Send clock)')
+        */
         sendClock()
         return
       }
@@ -139,8 +142,11 @@ module.exports = class PushProtocol {
         let span
         const { tracer } = this._collaboration._options
         if (tracer) {
-          span = tracer.startChildSpan('push.batches')
-          span.addAttribute('from', this._peerId())
+          const from = this._peerId()
+          const to = remotePeerId
+          span = tracer.startChildSpan(`push.batches ${from.slice(-3)} -> ` +
+                                      `${to.slice(-3)}`)
+          span.addAttribute('from', from)
           span.addAttribute('to', remotePeerId)
           span.addAttribute('fromClock', prettyClock(this._shared.clock()))
           span.addAttribute('toClock', prettyClock(remoteClock))
@@ -156,7 +162,6 @@ module.exports = class PushProtocol {
         */
         remoteClock = vectorclock.merge(remoteClock,
           await pushDeltaBatches(remoteClock, span))
-        console.log('Jim span end')
         span && span.end()
       }
 
@@ -278,10 +283,12 @@ module.exports = class PushProtocol {
       // If the remote sent us its clock, update our local copy
       if (newRemoteClock) {
         let clock
+        /*
         console.log('Jim', this._peerId().slice(-3), '<-', remotePeerId.slice(-3),
                     'push incoming',
                     prettyClock(this._shared.clock()) + ' <- ' +
                     prettyClock(newRemoteClock))
+                    */
         // If the remote is a pinner, assume its clock is authoritative.
         // If remote is asking us to start pushing, we're going to start
         // from the remote clock.

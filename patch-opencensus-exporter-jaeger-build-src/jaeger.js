@@ -53,34 +53,31 @@ class JaegerTraceExporter {
      * Is called whenever a span is ended.
      * @param root the ended span
      */
-    onEndSpan(root) {
+    async onEndSpan(root) {
         this.logger.debug('onEndSpan: adding rootSpan: %s', root.name);
         // UDPSender buffer is limited by maxPacketSize
-        this.addSpanToSenderBuffer(root)
-            .then(result => {
-            this.addToBuffer(root, result);
-            for (const span of root.spans) {
-                this.addSpanToSenderBuffer(span)
-                    .then(result => {
-                    this.addToBuffer(span, result);
-                })
-                    .catch(err => {
-                    return;
-                });
-            }
-        })
-            .catch(err => {
-            return;
-        });
+        try {
+          const result = await this.addSpanToSenderBuffer(root)
+          this.addToBuffer(root, result);
+          await this.flush()
+          for (const span of root.spans) {
+              const result = await this.addSpanToSenderBuffer(span)
+              this.addToBuffer(span, result);
+              await this.flush();
+          }
+        } catch (err) {
+            console.log('Jim err', err)
+        }
         // Set a buffer timeout
-        this.setBufferTimeout();
+        // this.setBufferTimeout();
     }
     /** Not used for this exporter */
     onStartSpan(root) { }
     // add span to local queue, which is limited by bufferSize
-    addToBuffer(span, numSpans) {
+    async addToBuffer(span, numSpans) {
         // if UDPSender has flushed his own buffer
         if (numSpans > 0) {
+            // console.log('Jim numSpans', numSpans)
             this.successCount += numSpans;
             // if span was not flushed
             if (numSpans === this.queue.length) {
@@ -94,7 +91,7 @@ class JaegerTraceExporter {
             this.logger.debug('adding to buffer %s', span.name);
             this.queue.push(span);
             if (this.queue.length > this.bufferSize) {
-                this.flush();
+                await this.flush();
             }
         }
     }
@@ -102,17 +99,16 @@ class JaegerTraceExporter {
     addSpanToSenderBuffer(span) {
         const thriftSpan = jaeger_driver_1.spanToThrift(span);
         return new Promise((resolve, reject) => {
-            // console.log('Jim addSpanToSenderBuffer', thriftSpan)
+            // console.log('Jim addSpanToSenderBuffer')
             this.sender.append(thriftSpan, (numSpans, err) => {
-                // console.log('Jim addSpanToSenderBuffer2', numSpans)
+                // console.log('Jim addSpanToSenderBuffer2', numSpans, err)
                 if (err) {
                     this.logger.error(`failed to add span: ${err}`);
                     reject(err);
                 }
                 else {
                     this.logger.debug('successful append for : %s', numSpans);
-                    this.flush()
-                    resolve(numSpans);
+                    this.flush().then(() => resolve(numSpans))
                 }
             });
         });

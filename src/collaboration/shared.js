@@ -40,13 +40,16 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
     if (collaboration.isRoot()) {
       let span
       const { tracer } = collaboration._options
+      const deltaValues = [...delta[0].values()].join('')
       if (tracer) {
-        span = tracer.startChildSpan('collaboration.applyAndPushDelta')
+        span = tracer.startChildSpan(
+          `shared.applyAndPushDelta ${id.slice(-3)} "${deltaValues}"`
+        )
         span.start()
       }
       const previousClock = clocks.getFor(id)
       const before = crdtType.value(state).join('')
-      apply(delta, true)
+      apply(delta, true, span)
       const after = crdtType.value(state).join('')
       const newClock = vectorclock.increment(previousClock, clockId)
       const authorClock = vectorclock.increment({}, clockId)
@@ -59,6 +62,7 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
         span.addAttribute('previousClock', prettyClock(previousClock))
         span.addAttribute('authorClock', prettyClock(authorClock))
         span.addAttribute('newClock', prettyClock(newClock))
+        span.addAttribute('deltaValues', deltaValues)
         span.end()
       }
       /*
@@ -148,7 +152,7 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
     onClockChanged(newClock)
   }
 
-  shared.apply = (deltaRecord, isPartial, force) => {
+  shared.apply = (deltaRecord, isPartial, force, span) => {
     const clock = clocks.getFor(id)
     const [previousClock, authorClock, [forName, typeName, delta]] = deltaRecord
     const deltaClock = vectorclock.sumAll(previousClock, authorClock)
@@ -171,27 +175,22 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       pushDelta(deltaRecord)
     }
     if (forName === name) {
-      const before = crdtType.value(state).join('')
-      apply(delta)
+      // const before = crdtType.value(state).join('')
+      apply(delta, false, span)
       onClockChanged(newClock)
-      const after = crdtType.value(state).join('')
+      if (span) {
+        span.addAttribute('oldClock', prettyClock(clock))
+        span.addAttribute('deltaPreviousClock', prettyClock(previousClock))
+        span.addAttribute('deltaAuthorClock', prettyClock(authorClock))
+        span.addAttribute('newClock', prettyClock(newClock))
+      }
+      // const after = crdtType.value(state).join('')
       /*
       console.log(chalk.yellow(`State: ${id.slice(-3)} ${after.length} ` +
                   `${prettyClock(newClock)}`))
       console.log(`  Before: "${before}"`)
       console.log(`  After: "${after}"`)
       */
-      const {
-        tracingSpan: span,
-        tracingDataLogger: traceLog
-      } = collaboration._options
-      if (span) {
-        span.addAnnotation('collaboration.shared.apply', {
-          z1_value_before: before,
-          z2_value_after: after,
-          z3_prettyClock: prettyClock(newClock)
-        })
-      }
       return newClock
     } else if (typeName) {
       return collaboration.sub(forName, typeName)
@@ -309,7 +308,7 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
 
   return shared
 
-  function apply (s, fromSelf) {
+  function apply (s, fromSelf, parentSpan) {
     debug('%s: apply ', id, s)
     if (options.replicateOnly) {
       state = s
@@ -334,8 +333,9 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       debug('%s: new state after join is', id, state)
       let span
       const { tracer } = collaboration._options
-      if (tracer) {
-        span = tracer.startChildSpan('collaboration.apply')
+      if (tracer && !parentSpan) {
+        const deltaValues = [...s[0].values()].join('')
+        span = tracer.startChildSpan(`shared.apply ${id.slice(-3)} "${deltaValues}"`)
         span.start()
         span.addAttribute('peer', id)
         span.addAttribute('oldState', encode(oldState).toString('base64'))
@@ -344,6 +344,11 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
         span.addAttribute('before', before)
         span.addAttribute('after', after)
         span.end()
+      }
+      if (parentSpan) {
+        parentSpan.addAttribute('oldState', encode(oldState).toString('base64'))
+        parentSpan.addAttribute('delta', encode(s).toString('base64'))
+        parentSpan.addAttribute('newState', encode(newState).toString('base64'))
       }
       try {
         changeEmitter.emitAll()
