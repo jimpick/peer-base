@@ -18,7 +18,7 @@ describe('collaboration with random changes', function () {
   const unixTime = Date.now()
   const peerCount = process.browser ? 10 : 2
   // const peerCount = process.browser ? 10 : 10
-  const charsPerPeer = 3
+  const charsPerPeer = 2
   // const charsPerPeer = 200
   this.timeout(2000000 * peerCount)
 
@@ -57,17 +57,22 @@ describe('collaboration with random changes', function () {
 
   before(async () => {
     await delay(1000)
-    Promise.all(peerIndexes.map(peerIndex => {
+    Promise.all(peerIndexes.map(async peerIndex => {
       // console.log('Starting', peerIndex)
-      const app = App()
-      swarm.push(app)
-      return app.start()
+      const peer = App()
+      swarm.push(peer)
+      await peer.start()
+      peer.id = (await peer.app.ipfs.id()).id
+      const rootSpan = await peerRootSpan(peer.id, unixTime)
+      peer.peerRootSpan = rootSpan
     }))
   })
 
-  after(() => Promise.all(peerIndexes.map((peerIndex) => {
-    if (swarm[peerIndex]) {
-      return swarm[peerIndex].stop()
+  after(() => Promise.all(peerIndexes.map(async peerIndex => {
+    const peer = swarm[peerIndex]
+    if (peer) {
+      await peer.stop()
+      peer.peerRootSpan.end()
     }
   })))
 
@@ -98,7 +103,7 @@ describe('collaboration with random changes', function () {
         'rga',
         {
           ...collaborationOptions,
-          makeRootSpan: getMakeRootSpan(peer.app.ipfs.id(), unixTime)
+          makeRootSpan: getMakeRootSpan(peer.peerRootSpan, peer.id, unixTime)
         }
       ))
     )
@@ -209,10 +214,22 @@ describe('collaboration with random changes', function () {
   })
 })
 
-function getMakeRootSpan (id, unixTime) {
+async function peerRootSpan (id, unixTime) {
+  const promise = new Promise(resolve => {
+    tracer.startRootSpan({ name: 'peer ' + id.slice(-3) }, resolve)
+  })
+  const rootSpan = await promise
+  rootSpan.addAttribute('unixTime', `${unixTime}`)
+  rootSpan.addAttribute('peer', `${id}`)
+  rootSpan.start()
+  return rootSpan
+}
+
+function getMakeRootSpan (peerRootSpan, id, unixTime) {
+  const spanContext = peerRootSpan.spanContext
   const makeRootSpan = name => {
     const promise = new Promise(resolve => {
-      tracer.startRootSpan({ name }, resolve)
+      tracer.startRootSpan({ name, spanContext }, resolve)
     })
     .then(rootSpan => {
       rootSpan.addAttribute('unixTime', `${unixTime}`)
