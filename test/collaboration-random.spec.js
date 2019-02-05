@@ -10,16 +10,15 @@ const PeerStar = require('../')
 const AppFactory = require('./utils/create-app')
 
 const { tracer, exporter } = require('./utils/tracer')
-let rootSpan
 
 const debug = require('debug')('peer-base:test:collaboration-random')
 
 const chalk = require('chalk')
 describe('collaboration with random changes', function () {
   const unixTime = Date.now()
-  const peerCount = process.browser ? 10 : 3
+  const peerCount = process.browser ? 10 : 2
   // const peerCount = process.browser ? 10 : 10
-  const charsPerPeer = 15
+  const charsPerPeer = 3
   // const charsPerPeer = 200
   this.timeout(2000000 * peerCount)
 
@@ -57,7 +56,6 @@ describe('collaboration with random changes', function () {
   }
 
   before(async () => {
-    rootSpan = await startRootSpan(unixTime)
     await delay(1000)
     Promise.all(peerIndexes.map(peerIndex => {
       // console.log('Starting', peerIndex)
@@ -74,20 +72,23 @@ describe('collaboration with random changes', function () {
   })))
 
   after(async () => {
-    rootSpan.end()
+    // rootSpan.end()
     await delay(2000)
     // exporter.flush()
     // await delay(2000)
   })
 
   after(() => {
-    // console.log('TraceId:', rootSpan.traceId)
-    // console.log('Unix Time:', unixTime)
-    console.log(`http://localhost:16686/trace/${rootSpan.traceId}`)
+    console.log('Unix Time:', unixTime)
+    console.log(`http://localhost:16686/search?limit=1500` +
+                `&lookback=1h&maxDuration&minDuration` +
+                `&service=peer-base` +
+                `&tags=%7B%22unixTime%22%3A%22${unixTime}%22%7D`)
   })
 
   before(async () => {
     collaborationOptions.keys = await PeerStar.keys.generate()
+    await delay(1000)
   })
 
   it('can be created', async () => {
@@ -97,12 +98,7 @@ describe('collaboration with random changes', function () {
         'rga',
         {
           ...collaborationOptions,
-          tracer: tracer,
-          tracingSpan: rootSpan,
-          tracingDataLogger: (...args) => {
-            // FIXME: Save to file
-            // console.log(...args)
-          }
+          makeRootSpan: getMakeRootSpan(peer.app.ipfs.id(), unixTime)
         }
       ))
     )
@@ -110,7 +106,7 @@ describe('collaboration with random changes', function () {
     await Promise.all(collaborations.map(async c => {
       const id = (await c.app.ipfs.id()).id
       collaborationIds.set(c, id)
-      c._options.tracingSpan.addAttribute('id', id)
+      // c._options.tracingSpan.addAttribute('id', id)
     }))
     // await waitForMembers(collaborations)
   })
@@ -213,15 +209,17 @@ describe('collaboration with random changes', function () {
   })
 })
 
-async function startRootSpan (unixTime) {
-  await delay(1000)
-  const rootSpan2 = await new Promise(resolve => {
-    tracer.startRootSpan({ name: 'peer' }, rootSpan3 => {
-      // console.log('Jim currentRootSpan', tracer.currentRootSpan)
-      resolve(rootSpan3)
+function getMakeRootSpan (id, unixTime) {
+  const makeRootSpan = name => {
+    const promise = new Promise(resolve => {
+      tracer.startRootSpan({ name }, resolve)
     })
-  })
-  tracer.currentRootSpan = rootSpan2
-  rootSpan2.addAttribute('unixTime', `${unixTime}`)
-  return rootSpan2
+    .then(rootSpan => {
+      rootSpan.addAttribute('unixTime', `${unixTime}`)
+      rootSpan.addAttribute('peer', `${id}`)
+      return rootSpan
+    })
+    return promise
+  }
+  return makeRootSpan
 }

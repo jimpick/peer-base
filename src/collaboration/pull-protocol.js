@@ -154,19 +154,19 @@ module.exports = class PullProtocol {
           const authorClock = decrypted[1]
           const values = [...decrypted[2][2][0].values()].join('')
           let span
-          const { tracer } = this._collaboration._options
-          if (tracer) {
+          const { makeRootSpan } = this._collaboration._options
+          if (makeRootSpan) {
             const to = this._peerId()
             const from = remotePeerId
             const before = this._shared.value().join('')
-            span = tracer.startChildSpan(
+            span = await makeRootSpan(
               `pull.saveDelta ${to.slice(-3)} <- ${from.slice(-3)} ` +
               `"${values}"`
             )
+            span.start()
             span.addAttribute('to', to)
             span.addAttribute('from', from)
             span.addAttribute('before', before)
-
           }
           /*
           console.log(chalk.red(
@@ -176,6 +176,7 @@ module.exports = class PullProtocol {
           console.log(`  ${prettyClock(previousClock)} ` +
                       `${prettyClock(authorClock)} "${values}"`)
           */
+          // saved = await this._shared.apply(decrypted, true, false, span)
           saved = await this._shared.apply(decrypted, true, false, span)
           if (span) {
             const after = this._shared.value().join('')

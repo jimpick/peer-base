@@ -38,24 +38,26 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
 
   const applyAndPushDelta = (delta) => {
     if (collaboration.isRoot()) {
-      let span
-      const { tracer } = collaboration._options
+      let spanPromise
+      const { makeRootSpan } = collaboration._options
       const deltaValues = [...delta[0].values()].join('')
-      if (tracer) {
-        span = tracer.startChildSpan(
+      if (makeRootSpan) {
+        spanPromise = makeRootSpan(
           `shared.applyAndPushDelta ${id.slice(-3)} "${deltaValues}"`
-        )
-        span.start()
+        ).then(span => {
+          span.start()
+          return span
+        })
       }
       const previousClock = clocks.getFor(id)
       const before = crdtType.value(state).join('')
-      apply(delta, true, span)
+      apply(delta, true)
       const after = crdtType.value(state).join('')
       const newClock = vectorclock.increment(previousClock, clockId)
       const authorClock = vectorclock.increment({}, clockId)
       const deltaRecord = [previousClock, authorClock, [name, crdtType.typeName, delta]]
       pushDelta(deltaRecord)
-      if (span) {
+      spanPromise && spanPromise.then(span => {
         span.addAttribute('peer', id)
         span.addAttribute('before', before)
         span.addAttribute('after', after)
@@ -64,7 +66,7 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
         span.addAttribute('newClock', prettyClock(newClock))
         span.addAttribute('deltaValues', deltaValues)
         span.end()
-      }
+      })
       /*
       console.log('Jim applyAndPushDelta previousClock', prettyClock(previousClock))
       console.log('Jim applyAndPushDelta authorClock', prettyClock(authorClock))
@@ -332,18 +334,20 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
 
       debug('%s: new state after join is', id, state)
       let span
-      const { tracer } = collaboration._options
-      if (tracer && !parentSpan) {
+      const { makeRootSpan } = collaboration._options
+      if (makeRootSpan && !parentSpan) {
         const deltaValues = [...s[0].values()].join('')
-        span = tracer.startChildSpan(`shared.apply ${id.slice(-3)} "${deltaValues}"`)
-        span.start()
-        span.addAttribute('peer', id)
-        span.addAttribute('oldState', encode(oldState).toString('base64'))
-        span.addAttribute('delta', encode(s).toString('base64'))
-        span.addAttribute('newState', encode(newState).toString('base64'))
-        span.addAttribute('before', before)
-        span.addAttribute('after', after)
-        span.end()
+        makeRootSpan(`shared.apply ${id.slice(-3)} "${deltaValues}"`)
+        .then(span => {
+          span.start()
+          span.addAttribute('peer', id)
+          span.addAttribute('oldState', encode(oldState).toString('base64'))
+          span.addAttribute('delta', encode(s).toString('base64'))
+          span.addAttribute('newState', encode(newState).toString('base64'))
+          span.addAttribute('before', before)
+          span.addAttribute('after', after)
+          span.end()
+        })
       }
       if (parentSpan) {
         parentSpan.addAttribute('oldState', encode(oldState).toString('base64'))

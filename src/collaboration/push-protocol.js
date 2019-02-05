@@ -140,11 +140,11 @@ module.exports = class PushProtocol {
       // If this peer is not a pinner we may have deltas to send
       if (!this._options.replicateOnly) {
         let span
-        const { tracer } = this._collaboration._options
-        if (tracer) {
+        const { makeRootSpan } = this._collaboration._options
+        if (makeRootSpan) {
           const from = this._peerId()
           const to = remotePeerId
-          span = tracer.startChildSpan(`push.batches ${from.slice(-3)} -> ` +
+          span = await makeRootSpan(`push.batches ${from.slice(-3)} -> ` +
                                       `${to.slice(-3)}`)
           span.addAttribute('from', from)
           span.addAttribute('to', remotePeerId)
