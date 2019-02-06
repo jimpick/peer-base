@@ -38,11 +38,11 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
 
   const applyAndPushDelta = (delta) => {
     if (collaboration.isRoot()) {
-      let spanPromise
-      const { makeRootSpan } = collaboration._options
+      let spanPromise = {}
+      const { makeRootSpan, tracer } = collaboration._options
       const deltaValues = [...delta[0].values()].join('')
       if (makeRootSpan) {
-        spanPromise = makeRootSpan(
+        spanPromise.promise = makeRootSpan(
           `shared.applyAndPushDelta ${id.slice(-3)} "${deltaValues}"`
         ).then(span => {
           span.start()
@@ -51,13 +51,21 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       }
       const previousClock = clocks.getFor(id)
       const before = crdtType.value(state).join('')
-      apply(delta, true)
+      apply(delta, true, ({ oldState, delta, newState }) => {
+        if (spanPromise.promise) {
+          spanPromise.promise = spanPromise.promise.then(span => {
+            tracer.currentRootSpan = span
+            addChildSpans(tracer, oldState, delta, newState)
+            return span
+          })
+        }
+      })
       const after = crdtType.value(state).join('')
       const newClock = vectorclock.increment(previousClock, clockId)
       const authorClock = vectorclock.increment({}, clockId)
       const deltaRecord = [previousClock, authorClock, [name, crdtType.typeName, delta]]
       pushDelta(deltaRecord)
-      spanPromise && spanPromise.then(span => {
+      spanPromise.promise && spanPromise.promise.then(span => {
         span.addAttribute('peer', id)
         span.addAttribute('before', before)
         span.addAttribute('after', after)
@@ -178,7 +186,13 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
     }
     if (forName === name) {
       // const before = crdtType.value(state).join('')
-      apply(delta, false, span)
+      apply(delta, false, ({ oldState, delta, newState }) => {
+        if (span) {
+          const { tracer } = collaboration._options
+          tracer.currentRootSpan = span
+          addChildSpans(tracer, oldState, delta, newState)
+        }
+      })
       onClockChanged(newClock)
       if (span) {
         span.addAttribute('oldClock', prettyClock(clock))
@@ -310,7 +324,7 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
 
   return shared
 
-  function apply (s, fromSelf, parentSpan) {
+  function apply (s, fromSelf, traceCallback) {
     debug('%s: apply ', id, s)
     if (options.replicateOnly) {
       state = s
@@ -335,7 +349,7 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
       debug('%s: new state after join is', id, state)
       let span
       const { makeRootSpan } = collaboration._options
-      if (makeRootSpan && !parentSpan) {
+      if (makeRootSpan && !traceCallback) {
         const deltaValues = [...s[0].values()].join('')
         makeRootSpan(`shared.apply ${id.slice(-3)} "${deltaValues}"`)
         .then(span => {
@@ -349,10 +363,17 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
           span.end()
         })
       }
-      if (parentSpan) {
+      if (traceCallback) {
+        traceCallback({
+          oldState: encode(oldState).toString('base64'),
+          delta: encode(s).toString('base64'),
+          newState: encode(newState).toString('base64')
+        })
+        /*
         parentSpan.addAttribute('oldState', encode(oldState).toString('base64'))
         parentSpan.addAttribute('delta', encode(s).toString('base64'))
         parentSpan.addAttribute('newState', encode(newState).toString('base64'))
+        */
       }
       try {
         changeEmitter.emitAll()
@@ -398,4 +419,24 @@ class VoidChangeEmitter {
   emitAll () {
     // DO NOTHING
   }
+}
+
+function addChildSpans (tracer, oldState, delta, newState) {
+  // Use child spans because of UDP limit
+  // Note: 9k UDP limit on OS X can be increased with:
+  // sudo sysctl -w net.inet.udp.maxdgram=65535
+  /*
+  const oldStateSpan = tracer.startChildSpan('oldState')
+  oldStateSpan.start()
+  oldStateSpan.addAttribute('oldState', oldState)
+  oldStateSpan.end()
+  const deltaSpan = tracer.startChildSpan('delta')
+  deltaSpan.start()
+  deltaSpan.addAttribute('delta', delta)
+  deltaSpan.end()
+  const newStateSpan = tracer.startChildSpan('newState')
+  newStateSpan.start()
+  newStateSpan.addAttribute('newState', newState)
+  newStateSpan.end()
+  */
 }

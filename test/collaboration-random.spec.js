@@ -16,9 +16,9 @@ const debug = require('debug')('peer-base:test:collaboration-random')
 const chalk = require('chalk')
 describe('collaboration with random changes', function () {
   const unixTime = Date.now()
-  const peerCount = process.browser ? 10 : 2
+  const peerCount = process.browser ? 10 : 3
   // const peerCount = process.browser ? 10 : 10
-  const charsPerPeer = 2
+  const charsPerPeer = 30
   // const charsPerPeer = 200
   this.timeout(2000000 * peerCount)
 
@@ -44,6 +44,7 @@ describe('collaboration with random changes', function () {
   let swarm = []
   let collaborations
   let collaborationIds = new Map()
+  let topRootSpan
 
   before(() => {
     const appName = AppFactory.createName()
@@ -57,14 +58,15 @@ describe('collaboration with random changes', function () {
 
   before(async () => {
     await delay(1000)
+    topRootSpan = await makeTopRootSpan(unixTime)
     Promise.all(peerIndexes.map(async peerIndex => {
       // console.log('Starting', peerIndex)
       const peer = App()
       swarm.push(peer)
       await peer.start()
       peer.id = (await peer.app.ipfs.id()).id
-      const rootSpan = await peerRootSpan(peer.id, unixTime)
-      peer.peerRootSpan = rootSpan
+      const peerRootSpan = await makePeerRootSpan(topRootSpan, peer.id, unixTime)
+      peer.peerRootSpan = peerRootSpan
     }))
   })
 
@@ -77,18 +79,17 @@ describe('collaboration with random changes', function () {
   })))
 
   after(async () => {
-    // rootSpan.end()
-    await delay(2000)
+    topRootSpan.end()
+    await delay(1000)
     // exporter.flush()
     // await delay(2000)
   })
 
   after(() => {
+    const { traceId } = topRootSpan
+    console.log('Trace Id:', traceId)
     console.log('Unix Time:', unixTime)
-    console.log(`http://localhost:16686/search?limit=1500` +
-                `&lookback=1h&maxDuration&minDuration` +
-                `&service=peer-base` +
-                `&tags=%7B%22unixTime%22%3A%22${unixTime}%22%7D`)
+    console.log(`http://localhost:16686/trace/${traceId}`)
   })
 
   before(async () => {
@@ -103,6 +104,7 @@ describe('collaboration with random changes', function () {
         'rga',
         {
           ...collaborationOptions,
+          tracer,
           makeRootSpan: getMakeRootSpan(peer.peerRootSpan, peer.id, unixTime)
         }
       ))
@@ -214,9 +216,23 @@ describe('collaboration with random changes', function () {
   })
 })
 
-async function peerRootSpan (id, unixTime) {
+async function makeTopRootSpan (unixTime) {
   const promise = new Promise(resolve => {
-    tracer.startRootSpan({ name: 'peer ' + id.slice(-3) }, resolve)
+    tracer.startRootSpan({ name: 'collaboration-random' }, resolve)
+  })
+  const rootSpan = await promise
+  rootSpan.addAttribute('unixTime', `${unixTime}`)
+  rootSpan.start()
+  return rootSpan
+}
+
+async function makePeerRootSpan (topRootSpan, id, unixTime) {
+  const spanContext = topRootSpan.spanContext
+  const promise = new Promise(resolve => {
+    tracer.startRootSpan({
+      name: 'peer ' + id.slice(-3),
+      spanContext
+    }, resolve)
   })
   const rootSpan = await promise
   rootSpan.addAttribute('unixTime', `${unixTime}`)
