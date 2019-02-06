@@ -9,7 +9,7 @@ const handlingData = require('../common/handling-data')
 const { encode, decode } = require('delta-crdts-msgpack-codec')
 const vectorclock = require('../common/vectorclock')
 const expectedNetworkError = require('../common/expected-network-error')
-const prettyClock = require('./pretty-clock')
+const { prettyClock } = require('./pretty-clock')
 const chalk = require('chalk')
 
 module.exports = class PullProtocol {

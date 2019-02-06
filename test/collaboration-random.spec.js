@@ -7,6 +7,7 @@ const expect = chai.expect
 
 const delay = require('delay')
 const PeerStar = require('../')
+const { registerPrettyClockPeer } = require('../src/collaboration/pretty-clock')
 const AppFactory = require('./utils/create-app')
 
 const { tracer, exporter } = require('./utils/tracer')
@@ -16,7 +17,7 @@ const debug = require('debug')('peer-base:test:collaboration-random')
 const chalk = require('chalk')
 describe('collaboration with random changes', function () {
   const unixTime = Date.now()
-  const peerCount = process.browser ? 10 : 3
+  const peerCount = process.browser ? 10 : 5
   // const peerCount = process.browser ? 10 : 10
   const charsPerPeer = 30
   // const charsPerPeer = 200
@@ -59,7 +60,7 @@ describe('collaboration with random changes', function () {
   before(async () => {
     await delay(1000)
     topRootSpan = await makeTopRootSpan(unixTime)
-    Promise.all(peerIndexes.map(async peerIndex => {
+    await Promise.all(peerIndexes.map(async peerIndex => {
       // console.log('Starting', peerIndex)
       const peer = App()
       swarm.push(peer)
@@ -68,6 +69,12 @@ describe('collaboration with random changes', function () {
       const peerRootSpan = await makePeerRootSpan(topRootSpan, peer.id, unixTime)
       peer.peerRootSpan = peerRootSpan
     }))
+    for (const peerIndex of peerIndexes) {
+      const peer = swarm[peerIndex]
+      if (peer) {
+        registerPrettyClockPeer(peer.id)
+      }
+    }
   })
 
   after(() => Promise.all(peerIndexes.map(async peerIndex => {

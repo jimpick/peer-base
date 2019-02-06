@@ -8,7 +8,7 @@ const b58Decode = require('bs58').decode
 const vectorclock = require('../common/vectorclock')
 const Store = require('./store')
 const peerToClockId = require('./peer-to-clock-id')
-const prettyClock = require('./pretty-clock')
+const { prettyClock } = require('./pretty-clock')
 const chalk = require('chalk')
 const { encode } = require('delta-crdts-msgpack-codec')
 

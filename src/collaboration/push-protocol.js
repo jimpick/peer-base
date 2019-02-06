@@ -14,7 +14,7 @@ const EventEmitter = require('events')
 const isUndefined = require('lodash/isUndefined')
 const pEvent = require('p-event')
 const peerToClockId = require('./peer-to-clock-id')
-const prettyClock = require('./pretty-clock')
+const { prettyClock } = require('./pretty-clock')
 const chalk = require('chalk')
 
 // const RGA = require('delta-crdts').type('rga')
