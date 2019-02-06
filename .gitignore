@@ -58,5 +58,8 @@ typings/
 package-lock.json
 yarn.lock
 
+# Test results
+test/results
+
 # misc
 .DS_Store
