@@ -19,12 +19,9 @@ describe('collaboration with random changes', function () {
   const unixTime = Date.now()
   const peerCount = process.browser ? 10 : 15
   // const peerCount = process.browser ? 10 : 10
-  const charsPerPeer = 50
-  const timeout = 100 * charsPerPeer * peerCount
+  const charsPerPeer = 100
+  const timeout = 150 * charsPerPeer * peerCount
   this.timeout(timeout)
-  console.log('Now:', (new Date()).toLocaleString())
-  console.log(`Timeout in: ${Math.floor(timeout / 1000)}s`)
-  console.log('Timeout at:', (new Date(Date.now() + timeout)).toLocaleString())
 
   const manyCharacters = (
     'abcdefghijklmnopqrstuvwxyz' +
@@ -71,6 +68,7 @@ describe('collaboration with random changes', function () {
       peer.id = (await peer.app.ipfs.id()).id
       const peerRootSpan = await makePeerRootSpan(topRootSpan, peer.id, unixTime)
       peer.peerRootSpan = peerRootSpan
+      peer.peerRootSpan.end()
     }))
     for (const peerIndex of peerIndexes) {
       const peer = swarm[peerIndex]
@@ -82,19 +80,19 @@ describe('collaboration with random changes', function () {
     console.log('Trace Id:', traceId)
     console.log('Unix Time:', unixTime)
     console.log(`http://localhost:16686/trace/${traceId}`)
+    topRootSpan.end()
   })
 
   after(() => Promise.all(peerIndexes.map(async peerIndex => {
     const peer = swarm[peerIndex]
     if (peer) {
       await peer.stop()
-      peer.peerRootSpan.end()
+      // peer.peerRootSpan.end()
     }
   })))
 
   after(async () => {
-    topRootSpan.end()
-    await delay(2000)
+    await delay(5000)
   })
 
   before(async () => {
@@ -124,6 +122,10 @@ describe('collaboration with random changes', function () {
   })
 
   it('handles random changes', async () => {
+    console.log('Now:', (new Date()).toLocaleString())
+    console.log(`Timeout in: ${Math.floor(timeout / 1000)}s`)
+    console.log('Timeout at:', (new Date(Date.now() + timeout)).toLocaleString())
+
     const expectedCharacterCount = charsPerPeer * collaborations.length
 
     const waitForHalfModifications = () => Promise.all(collaborations.map((collaboration) => new Promise((resolve) => {

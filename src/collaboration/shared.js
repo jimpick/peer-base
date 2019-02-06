@@ -173,6 +173,9 @@ module.exports = (name, id, crdtType, ipfs, collaboration, clocks, options) => {
         isInteresting = vectorclock.isIdentical(clock, newClock)
       }
       if (!isInteresting) {
+        if (span) {
+          span.addAttribute('isInteresting', false)
+        }
         return false
       }
 
