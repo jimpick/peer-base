@@ -17,11 +17,14 @@ const debug = require('debug')('peer-base:test:collaboration-random')
 const chalk = require('chalk')
 describe('collaboration with random changes', function () {
   const unixTime = Date.now()
-  const peerCount = process.browser ? 10 : 5
+  const peerCount = process.browser ? 10 : 15
   // const peerCount = process.browser ? 10 : 10
-  const charsPerPeer = 30
-  // const charsPerPeer = 200
-  this.timeout(2000000 * peerCount)
+  const charsPerPeer = 50
+  const timeout = 100 * charsPerPeer * peerCount
+  this.timeout(timeout)
+  console.log('Now:', (new Date()).toLocaleString())
+  console.log(`Timeout in: ${Math.floor(timeout / 1000)}s`)
+  console.log('Timeout at:', (new Date(Date.now() + timeout)).toLocaleString())
 
   const manyCharacters = (
     'abcdefghijklmnopqrstuvwxyz' +
@@ -75,6 +78,10 @@ describe('collaboration with random changes', function () {
         registerPrettyClockPeer(peer.id)
       }
     }
+    const { traceId } = topRootSpan
+    console.log('Trace Id:', traceId)
+    console.log('Unix Time:', unixTime)
+    console.log(`http://localhost:16686/trace/${traceId}`)
   })
 
   after(() => Promise.all(peerIndexes.map(async peerIndex => {
@@ -87,16 +94,7 @@ describe('collaboration with random changes', function () {
 
   after(async () => {
     topRootSpan.end()
-    await delay(1000)
-    // exporter.flush()
-    // await delay(2000)
-  })
-
-  after(() => {
-    const { traceId } = topRootSpan
-    console.log('Trace Id:', traceId)
-    console.log('Unix Time:', unixTime)
-    console.log(`http://localhost:16686/trace/${traceId}`)
+    await delay(2000)
   })
 
   before(async () => {
