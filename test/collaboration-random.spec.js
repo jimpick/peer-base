@@ -18,8 +18,11 @@ const chalk = require('chalk')
 describe('collaboration with random changes', function () {
   const unixTime = Date.now()
   const peerCount = 12
-  const charsPerPeer = 100
-  const timeout = 150 * charsPerPeer * peerCount
+  const turnsPerPeer = 5
+  const charsPerTurn = 20
+  const pauseBetweenTurns = 1000
+  const timeout = 150 * turnsPerPeer * charsPerTurn * peerCount +
+    pauseBetweenTurns * peerCount * turnsPerPeer
   this.timeout(timeout)
 
   const manyCharacters = (
@@ -134,29 +137,34 @@ describe('collaboration with random changes', function () {
     console.log(`Timeout in: ${Math.floor(timeout / 1000)}s`)
     console.log('Timeout at:', (new Date(Date.now() + timeout)).toLocaleString())
 
-    const expectedCharacterCount = charsPerPeer * collaborations.length
+    const expectedCharacterCount = charsPerTurn * turnsPerPeer * collaborations.length
 
-    const waitForHalfModifications = () => Promise.all(collaborations.map((collaboration) => new Promise((resolve) => {
-      const expectedCount = Math.round(expectedCharacterCount / 2)
-      const currentCount = collaboration.shared.value().length
-
-      if (currentCount >= expectedCount) {
-        return resolve()
-      }
-
-      const onStateChanged = () => {
-        const currentCount = collaboration.shared.value().length
-        if (currentCount >= expectedCount) {
-          collaboration.removeListener('state changed', onStateChanged)
-          resolve()
+    debug('take turns pushing chars')
+    for (let turnNum = 0; turnNum < turnsPerPeer; turnNum++) {
+      for (let i in collaborations) {
+        const collaboration = collaborations[i]
+        const startChar = i * turnsPerPeer * charsPerTurn
+        for (let j = 0; j < charsPerTurn; j++) {
+          const character = characterFrom(
+            manyCharacters,
+            startChar + turnNum * charsPerTurn + j
+          )
+          debug(chalk.green(
+            `Push ${i + 1} ${collaborationIds.get(collaboration).slice(-3)} ` +
+            `${turnNum + 1} ${j + 1} "${character}"`
+          ))
+          collaboration.shared.push(character)
+          await delay(randomShortTime())
         }
+        await delay(pauseBetweenTurns)
       }
+    }
 
-      collaboration.on('state changed', onStateChanged)
-    })))
+    // Wait for all the state changes to come in
+    debug('waiting for state changes')
 
-    const modifications = async (collaboration, i) => {
-      const waitForCharCount = new Promise((resolve) => {
+    await Promise.all(collaborations.map(
+      collaboration => new Promise(resolve => {
         debug(`Waiting1 ${collaborationIds.get(collaboration).slice(-3)} ` +
               `${collaboration.shared.value().length}`)
 
@@ -174,29 +182,7 @@ describe('collaboration with random changes', function () {
           }
         })
       })
-
-      for (let j = 0; j < charsPerPeer; j++) {
-        const character = characterFrom(manyCharacters, i * charsPerPeer + j)
-        debug(chalk.green(
-          `Push ${collaborationIds.get(collaboration).slice(-3)} ${j + 1} "${character}"`
-        ))
-        collaboration.shared.push(character)
-        if (i === Math.round(charsPerPeer / 2)) {
-          await waitForHalfModifications()
-        } else {
-          await delay(randomShortTime())
-        }
-      }
-
-      return waitForCharCount.then(async () => {
-        debug('got state changes for', collaborationIds.get(collaboration))
-      })
-    }
-
-    // Wait for all the state changes to come in
-    debug('waiting for state changes')
-
-    await Promise.all(collaborations.map(modifications))
+    ))
     debug('got all state changes')
 
     // The length of all collaborations should be the expected length
@@ -216,7 +202,7 @@ describe('collaboration with random changes', function () {
       const clocks = collaboration.vectorClock(peerId)
       expect(Object.keys(clocks).length).to.equal(peerCount)
       for (let clock of Object.values(clocks)) {
-        expect(clock).to.equal(charsPerPeer)
+        expect(clock).to.equal(turnsPerPeer * charsPerTurn)
       }
     }
 

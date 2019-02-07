@@ -20,7 +20,7 @@ function cleanup {
 
 trap cleanup SIGINT
 
-gtimeout -v -k 3 200 npx aegir test -t node -f test/collaboration-random.spec.js &
+gtimeout -v -k 3 260 npx aegir test -t node -f test/collaboration-random.spec.js &
 PID=$!
 echo PID: $PID
 wait $PID
