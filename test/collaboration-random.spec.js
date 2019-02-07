@@ -17,8 +17,7 @@ const debug = require('debug')('peer-base:test:collaboration-random')
 const chalk = require('chalk')
 describe('collaboration with random changes', function () {
   const unixTime = Date.now()
-  const peerCount = process.browser ? 10 : 12
-  // const peerCount = process.browser ? 10 : 10
+  const peerCount = 12
   const charsPerPeer = 100
   const timeout = 150 * charsPerPeer * peerCount
   this.timeout(timeout)
@@ -79,7 +78,8 @@ describe('collaboration with random changes', function () {
     const { traceId } = topRootSpan
     console.log('Trace Id:', traceId)
     console.log('Unix Time:', unixTime)
-    console.log(`http://localhost:16686/trace/${traceId}`)
+    // console.log(`http://localhost:16686/trace/${traceId}`)
+    console.log(`https://jaeger.jimpick.com/trace/${traceId}`)
     topRootSpan.end()
   })
 
@@ -93,6 +93,14 @@ describe('collaboration with random changes', function () {
 
   after(async () => {
     await delay(5000)
+    /*
+    console.log('Draining jaeger queue...')
+    for (let i = 0; i < 10; i++) {
+      console.log(exporter.queue.length)
+      await delay(1000)
+    }
+    console.log(exporter.queue.length)
+    */
   })
 
   before(async () => {
